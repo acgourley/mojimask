@@ -18,6 +18,9 @@ ALLOWED = [
     "web/assets/icon_art.jpg",    # the app icon's painting, public domain
     "web/assets/portrait_mona.png",  # the default portrait: the Mona Lisa's head, public domain
     "test_clips/jazz.mp4",    # Our Dancing Daughters (1928), US public domain: the sample clip
+    "docs/media/jazz-walkthrough.mp4",         # the website's screen recording of the app on jazz.mp4
+    "docs/media/jazz-walkthrough-poster.jpg",  # its poster frame
+    "docs/img/*.webp",        # the website's pictures: public-domain paintings with emoji, the app shown on them
 ]
 NEVER = ["out/*", "test_clips/*"]  # projects, frames, crops, census of real footage, other clips
 

@@ -6,7 +6,7 @@
   {"key": "whitehat", "label": "White Hat", "hint": "Black, white and gray animals, for black-and-white footage",
    "emoji": ["🐼", "🐨", "🐰", "🐭", "🐻‍❄️"]},
   {"key": "flock", "label": "Flock", "hint": "Just sheep", "emoji": ["🐑", "🐏"]},
-  {"key": "food", "label": "Pseudonom", "hint": "Snacks for heads",
+  {"key": "food", "label": "PseudoNom", "hint": "Snacks for heads",
    "emoji": ["🍔", "🍟", "🍕", "🌮", "🍓", "🍉", "🥑", "🍪", "🧁", "🍋", "🍑", "🥥", "🍊", "🍎", "🍅", "🥭", "🍙", "🧀", "🍈"]},
   {"key": "hungerforce", "label": "HungerForce", "hint": "Fries, burgers, meatballs, shakes", "emoji": ["🍟", "🍔", "🧆", "🥤"]},
   {"key": "moooooon", "label": "Moooooon", "hint": "Everyone is the full moon", "emoji": ["🌝"]},

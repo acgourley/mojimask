@@ -26,6 +26,8 @@ test_clips/*
 *.HEIC
 # ...except the sample clip the app ships with (packaging/build_mac.sh bundles it)
 !test_clips/jazz.mp4
+# ...and the website's walkthrough of the app on that clip (GitHub Pages serves docs/)
+!docs/media/jazz-walkthrough.mp4
 web/assets/portrait_test.png
 web/assets/portrait_test.png.pose.json
 web/assets/portrait_default.png
@@ -44,6 +46,9 @@ web/assets/*.pose.json
 !web/assets/gallery/*.jpg
 !web/assets/icon_art.jpg
 !web/assets/portrait_mona.png
+!docs/media/jazz-walkthrough-poster.jpg
+# ...and the website's pictures: public-domain paintings wearing emoji, and the app shown on them
+!docs/img/*.webp
 
 # --- finished research scripts, kept on disk but not in the repo: nothing in the app or the current
 # developer tools (AGENTS.md) imports them.

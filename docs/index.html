@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>mojimask: face masking for complex videos</title>
+  <meta name="description" content="Face masking for dance parties, protests and other complex videos. Offline, free and open source.">
+  <meta name="theme-color" content="#07060D">
+  <meta property="og:title" content="mojimask">
+  <meta property="og:description" content="Face masking for dance parties, protests and other complex videos. Offline, free and open source.">
+  <meta property="og:image" content="img/disguise-masquerave.webp">
+  <link rel="preload" href="fonts/Nunito.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 15V3M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5"/></symbol>
+  <symbol id="i-github" viewBox="0 0 24 24"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M6 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L7.5 3.64A1 1 0 0 0 6 4.5Z"/></symbol>
+  <symbol id="i-max" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></symbol>
+</svg>
+
+<header class="hero">
+  <div class="wrap hero-body">
+    <div class="hero-copy">
+      <h1 class="wordmark" aria-label="mojimask">moji<b>mask</b></h1>
+      <p class="subline">Face masking for dance parties, protests and other complex videos. Offline, free and open source.</p>
+      <div class="actions">
+        <a class="btn btn-primary" href="https://github.com/acgourley/mojimask/releases/latest">
+          <svg class="icon"><use href="#i-download"/></svg>Download for macOS</a>
+        <a class="btn btn-ghost" href="https://github.com/acgourley/mojimask">
+          <svg class="icon"><use href="#i-github"/></svg>GitHub</a>
+      </div>
+      <p class="note">Requires Apple Silicon. Nothing leaves your Mac.</p>
+    </div>
+    <div class="gallery" aria-hidden="true">
+      <img class="framed" src="img/hero-mona.webp" width="226" height="292" alt="">
+      <img class="framed framed-big" src="img/hero-cavalier.webp" width="274" height="353" alt="">
+      <img class="framed" src="img/hero-pearl.webp" width="226" height="292" alt="">
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="video-section">
+    <div class="wrap center">
+      <h2 class="title">Advanced tracking for tricky shots</h2>
+      <div class="player" id="player">
+        <video id="demo" preload="none" playsinline poster="media/jazz-walkthrough-poster.jpg">
+          <source src="media/jazz-walkthrough.mp4" type="video/mp4">
+        </video>
+        <button class="player-cover" id="play" type="button" aria-label="Play the 45 second demo">
+          <span class="play-btn"><svg><use href="#i-play"/></svg></span>
+          <span class="player-bar">
+            <span class="player-label">Watch the demo</span>
+            <span class="player-track"></span>
+            <svg class="icon-sm"><use href="#i-max"/></svg>
+          </span>
+        </button>
+      </div>
+      <p class="caption">See a 45 second demo in the clip above.</p>
+    </div>
+  </section>
+
+  <section class="features">
+    <div class="wrap">
+      <h2 class="features-title">For the videos other tools give up on</h2>
+
+      <div class="feature">
+        <div class="feature-copy">
+          <h3>Multilayered detection</h3>
+          <p class="feature-body">Crowds, strobe lights, fast motion can confuse other tools. Mojimask uses research grade machine learning to find, follow and understand each person in the scene.</p>
+          <ul class="points">
+            <li>Finding: YOLOv5-Face and RetinaFace detect and double-check faces. YOLO11x-pose finds heads even when faces are hidden, and tilts the masks.</li>
+            <li>Following: optical flow follows each person from frame to frame, and SFace and OSNet-AIN recognise them when they reappear.</li>
+            <li>Depth: Depth Anything V2 keeps faces at different distances apart and layers covers behind whatever is in front of them.</li>
+          </ul>
+        </div>
+        <img class="shot" src="img/feature-scan.webp" width="680" height="353" loading="lazy"
+             alt="The scan step: boxes on every dancer's face in a Rubens painting, 26% done">
+      </div>
+
+      <div class="feature feature-flip">
+        <img class="shot" src="img/feature-decisions.webp" width="680" height="500" loading="lazy"
+             alt="The Decisions step: two crops side by side, asking whether they are the same person">
+        <div class="feature-copy">
+          <h3>Human judgement</h3>
+          <p class="feature-body">For the perfectionist, the app will still ask you to weigh in on the tricky cases, as well as allow for refinement.</p>
+          <ul class="checks">
+            <li><svg class="icon"><use href="#i-check"/></svg>Quick workflow for unresolved decisions</li>
+            <li><svg class="icon"><use href="#i-check"/></svg>Automatic judgements can be modified</li>
+            <li><svg class="icon"><use href="#i-check"/></svg>Set custom masks or unmask the consenting</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="disguises">
+    <div class="wrap">
+      <div class="center">
+        <h2 class="title">Some pizzazz with your privacy</h2>
+        <p class="lede">Emoji presets, blur, pixelate, or even upload a sticker. Various options to match scene lighting and body pose.</p>
+      </div>
+      <div class="grid grid-2">
+        <figure class="disguise">
+          <img src="img/disguise-masquerave.webp" width="612" height="383" loading="lazy" alt="A tarantella dance scene, every face covered by a smiling emoji">
+          <figcaption><strong>Masquerave</strong><span>Dance scene in Naples · Italian School</span></figcaption>
+        </figure>
+        <figure class="disguise">
+          <img src="img/disguise-blur-pixelate-custom.webp" width="612" height="383" loading="lazy" alt="The School of Athens in three stripes: blurred faces, pixelated faces, and one custom face on every head">
+          <figcaption><strong>Blur · Pixelate · Custom</strong><span>The School of Athens · Raphael, 1511</span></figcaption>
+        </figure>
+      </div>
+      <div class="grid grid-3">
+        <figure class="disguise">
+          <img src="img/disguise-zooanon.webp" width="400" height="250" loading="lazy" alt="Rubens' villagers dancing with animal emoji faces">
+          <figcaption><strong>ZooAnon</strong><span>Dance of the Villagers · Rubens, c. 1635</span></figcaption>
+        </figure>
+        <figure class="disguise">
+          <img src="img/disguise-whitehat.webp" width="400" height="250" loading="lazy" alt="Liberty Leading the People with white animal emoji faces">
+          <figcaption><strong>WhiteHat</strong><span>Liberty Leading the People · Delacroix, 1830</span></figcaption>
+        </figure>
+        <figure class="disguise">
+          <img src="img/disguise-pseudonom.webp" width="400" height="250" loading="lazy" alt="The Marriage of the Virgin with fruit and food emoji faces">
+          <figcaption><strong>PseudoNom</strong><span>The Marriage of the Virgin · Raphael, 1504</span></figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section class="cta">
+    <div class="wrap center cta-content">
+      <h2 class="cta-title">Open source. Made for fun. Contributions welcome.</h2>
+      <div class="actions">
+        <a class="btn btn-primary" href="https://github.com/acgourley/mojimask/releases/latest">
+          <svg class="icon"><use href="#i-download"/></svg>Download for macOS</a>
+        <a class="btn btn-ghost btn-ghost-strong" href="https://github.com/acgourley/mojimask">
+          <svg class="icon"><use href="#i-github"/></svg>Star on GitHub</a>
+      </div>
+      <a class="repo" href="https://github.com/acgourley/mojimask">github.com/acgourley/mojimask</a>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="wrap footer-body">
+    <div class="footer-brand">
+      <span class="wordmark wordmark-sm">moji<b>mask</b></span>
+      <span class="footer-note">Paintings are public-domain works, wearing emoji for the occasion.</span>
+    </div>
+    <nav class="footer-links">
+      <a href="https://github.com/acgourley/mojimask">GitHub</a>
+      <a href="https://github.com/acgourley/mojimask/releases">Releases</a>
+      <a href="https://github.com/acgourley/mojimask/issues">Issues</a>
+      <a href="https://github.com/acgourley/mojimask/blob/main/LICENSE">License</a>
+    </nav>
+  </div>
+</footer>
+
+<script>
+  (function () {
+    var video = document.getElementById("demo"), cover = document.getElementById("play");
+    cover.addEventListener("click", function () {
+      cover.hidden = true;
+      video.controls = true;
+      video.play();
+    });
+  })();
+</script>
+</body>
+</html>
