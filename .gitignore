@@ -49,6 +49,9 @@ web/assets/*.pose.json
 !docs/media/jazz-walkthrough-poster.jpg
 # ...and the website's pictures: public-domain paintings wearing emoji, and the app shown on them
 !docs/img/*.webp
+!docs/img/social-card.jpg
+!docs/img/favicon.png
+!docs/img/apple-touch-icon.png
 
 # --- finished research scripts, kept on disk but not in the repo: nothing in the app or the current
 # developer tools (AGENTS.md) imports them.

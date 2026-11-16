@@ -21,6 +21,9 @@ ALLOWED = [
     "docs/media/jazz-walkthrough.mp4",         # the website's screen recording of the app on jazz.mp4
     "docs/media/jazz-walkthrough-poster.jpg",  # its poster frame
     "docs/img/*.webp",        # the website's pictures: public-domain paintings with emoji, the app shown on them
+    "docs/img/social-card.jpg",       # the website's link-preview picture: a public-domain painting with emoji
+    "docs/img/favicon.png",           # the app icon (a public-domain painting with an emoji), small
+    "docs/img/apple-touch-icon.png",  # the same, for iOS home screens
 ]
 NEVER = ["out/*", "test_clips/*"]  # projects, frames, crops, census of real footage, other clips
 
