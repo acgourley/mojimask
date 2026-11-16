@@ -1,0 +1,813 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title data-i18n="nav.edit"></title>
+<link rel="stylesheet" href="/theme.css">
+<script src="/brand.js"></script>
+<style>
+  :root { --sel: #ffffff; }
+  html, body { height: 100%; overflow: hidden; }
+  body { font-size: 13px; }
+  #app { display: grid; grid-template-rows: 1fr; height: 100vh; }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 340px; min-height: 0; }
+  /* the picture's column: tools above it, the transport and the timeline below */
+  .stagecol { display: flex; flex-direction: column; gap: 14px; padding: 20px; min-width: 0; min-height: 0; }
+  .toolbar, .transport { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .tools .state { color: var(--faint); } .tools button.on .state { color: var(--accent); } .tools button.on { border-color: var(--accent); }
+  .tools .ic { width: 14px; height: 14px; color: var(--dim); }
+  #labelstatus { color: var(--dim); } #labelstatus:empty { display: none; }
+  #stage { flex: 1; display: flex; justify-content: center; align-items: center; min-height: 0; position: relative; }
+  canvas#view { background: #000; cursor: crosshair; border-radius: 12px; }
+  .transport { flex-wrap: nowrap; }
+  .transport .left { display: flex; align-items: center; gap: 14px; min-width: 0; }
+  .playbtn { width: 40px; height: 40px; padding: 0; justify-content: center; border-radius: 50%; background: var(--accent); border-color: var(--accent); color: var(--ink); flex: none; }
+  .playbtn:hover { color: var(--ink); filter: brightness(1.06); }
+  .fstep { display: flex; gap: 0; } .fstep button { width: 24px; height: 28px; color: var(--soft); } .fstep .ic { width: 18px; height: 18px; }
+  #frameinfo { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  #framenote { color: var(--dim); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .legend { display: flex; gap: 16px; flex: none; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; color: var(--dim); font-size: 12px; }
+  .legend i { width: 10px; height: 10px; border: 2px solid; border-radius: 2px; display: inline-block; }
+  footer { flex: none; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  canvas#timeline { width: 100%; height: 60px; display: block; cursor: pointer; }
+  /* the panel: what covers the faces, the selected box, the emoji, the lighting */
+  aside { border-left: 1px solid var(--line); background: var(--panel); display: flex; flex-direction: column; min-height: 0; overflow-y: auto; }
+  aside > section { flex-shrink: 0; }  /* a short window scrolls the panel rather than squashing it */
+  aside section { padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  aside section:last-child { border-bottom: 0; }
+  aside h2 { font: 600 11px/1.3 var(--body); text-transform: uppercase; letter-spacing: 1.5px; color: var(--faint); margin: 0 0 10px; }
+  #sel .row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  #sel button { padding: 6px 10px; border-radius: 8px; }
+  .keysbtn { width: 100%; border: 0; padding: 0; justify-content: flex-start; gap: 8px; color: var(--soft); font-weight: 400; }
+  .keysbtn kbd { margin-left: auto; } .keysbtn .ic { width: 15px; height: 15px; color: var(--dim); }
+  .keys { color: var(--dim); font-size: 12px; columns: 2; column-gap: 12px; margin-top: 12px; }
+  .keys b { color: var(--text); font-weight: 600; }
+  .decs { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 8px; font-size: 12px; }
+  .decs .d { display: flex; gap: 6px; align-items: baseline; margin: 3px 0; }
+  .decs .k { color: var(--dim); min-width: 52px; } .decs .a { font-weight: 600; } .decs .by { color: var(--warn); font-size: 11px; }
+  .decs .by.you { color: var(--accent); } .decs .by.open { color: var(--dim); }
+  body:not(.dev) .devonly { display: none !important; }  /* developer mode only (MOJIMASK_DEV=1) */
+  /* a two-way choice in the panel (their face / not a face): the theme's segmented look */
+  .seg2 { display: inline-flex; gap: 2px; padding: 3px; background: var(--deep); border: 1px solid var(--line); border-radius: 10px; margin-right: 6px; }
+  .seg2 button, #sel .seg2 button { border: 0; border-radius: 8px; padding: 5px 10px; color: var(--dim); }
+  .seg2 button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; } .seg2 button.on.no { background: var(--raised2); color: var(--text); }
+  .styleseg { display: flex; margin: 0; } .styleseg button { flex: 1 1 auto; justify-content: center; padding: 6px 4px; }
+  .notice { background: color-mix(in srgb, var(--warn) 16%, var(--bg)); color: #ffe9a8; padding: 8px 16px; border-bottom: 1px solid var(--line); font-size: 12px; }
+  a.act { cursor: pointer; }
+</style>
+</head>
+<body>
+<div id="app">
+  <main>
+    <div class="stagecol">
+      <div class="toolbar">
+        <div class="tools">
+          <div class="seg" id="viewbtn" role="group" data-i18n-aria-label="edit.view_label" title="V">
+            <button data-v="covers" class="on" aria-pressed="true" data-i18n="edit.view_covers"></button><button data-v="boxes" aria-pressed="false" data-i18n="edit.view_boxes"></button></div>
+        </div>
+        <div class="tools">
+          <span id="labelstatus" class="devonly"></span>
+          <button id="exportlabels" class="devonly" title="Write clean face / not-face labels for training">Export labels</button>
+          <button id="undo" title="⌘Z"><i data-ic="undo-2" data-size="14"></i><span data-i18n="edit.undo"></span></button>
+          <button id="redo" title="⇧⌘Z"><i data-ic="redo-2" data-size="14"></i><span data-i18n="edit.redo"></span></button>
+        </div>
+      </div>
+      <div id="stage"><canvas id="view"></canvas></div>
+      <div class="transport">
+        <div class="left">
+          <button id="play" class="playbtn" title="Space" data-i18n-aria-label="common.play"><i data-ic="play"></i></button>
+          <span class="fstep" id="fstep"><button class="icon" id="prevf" title="← (⇧←: 10)" data-i18n-aria-label="edit.back_frame"><i data-ic="chevron-left" data-size="18"></i></button><button class="icon" id="nextf" title="→ (⇧→: 10)" data-i18n-aria-label="edit.forward_frame"><i data-ic="chevron-right" data-size="18"></i></button></span>
+          <span id="frameinfo"></span>
+          <span id="framenote"></span>
+        </div>
+        <div class="legend">
+          <span><i style="border-color:var(--obs)"></i><span data-i18n="edit.legend.detected"></span></span>
+          <span><i style="border-color:var(--coast)"></i><span data-i18n="edit.legend.held"></span></span>
+          <span><i style="border-color:var(--manual)"></i><span data-i18n="edit.legend.manual"></span></span>
+        </div>
+      </div>
+      <footer><canvas id="timeline" data-i18n-title="edit.timeline_tip"></canvas></footer>
+    </div>
+    <aside>
+      <section id="coversec"><h2 data-i18n="edit.cover_with"></h2><div class="seg2 styleseg" id="stylepick"></div>
+        <div id="portraitrow" class="hidden" style="display:flex;gap:10px;align-items:center;margin-top:10px">
+          <img id="portraitimg" data-i18n-alt="edit.portrait.alt" style="width:56px;height:56px;border-radius:8px;background:var(--deep);object-fit:contain">
+          <div style="flex:1;min-width:0">
+            <button id="portraitpick" class="small" data-i18n="edit.portrait.choose"></button>
+            <input type="file" id="portraitfile" accept="image/png,image/*" class="hidden">
+            <div id="portraitmsg" class="muted" style="font-size:11px;margin-top:4px" data-i18n="edit.portrait.hint"></div>
+          </div>
+        </div></section>
+      <section id="sel"><h2 data-i18n="edit.selection"></h2><div id="selbody" class="muted" data-i18n="edit.sel.none"></div></section>
+      <section>
+        <button class="keysbtn" id="keysbtn" aria-expanded="false" aria-controls="keys"><i data-ic="keyboard" data-size="15"></i><span data-i18n="edit.keys.title"></span><kbd>?</kbd></button>
+        <div class="keys hidden" id="keys">
+          <div><b>← →</b> <span data-i18n="edit.keys.frame"></span></div><div><b>⇧← →</b> ±10</div><div><b>Space</b> <span data-i18n="edit.keys.play"></span></div>
+          <div><b data-i18n="edit.keys.drag"></b> <span data-i18n="edit.keys.drag_what"></span></div><div><b data-i18n="edit.keys.click"></b> <span data-i18n="edit.keys.click_what"></span></div>
+          <div><b>Del</b> <span data-i18n="edit.keys.del"></span></div><div><b>S</b> <span data-i18n="edit.keys.split"></span></div><div><b>R</b> <span data-i18n="edit.keys.why"></span></div>
+          <div><b>[ ]</b> <span data-i18n="edit.keys.trim"></span></div><div><b>K</b> <span data-i18n="edit.keys.undo_correction"></span></div>
+          <div><b>E</b> <span data-i18n="edit.keys.emoji"></span></div><div><b>U</b> <span data-i18n="edit.keys.show"></span></div><div><b>V</b> <span data-i18n="edit.keys.view"></span></div>
+          <div><b>B</b> <span data-i18n="edit.keys.pose"></span></div><div><b>D</b> <span data-i18n="edit.keys.depth"></span></div><div><b>Esc</b> <span data-i18n="edit.keys.deselect"></span></div><div><b>⌘Z</b> <span data-i18n="edit.keys.undo"></span></div><div><b>⇧⌘Z</b> <span data-i18n="edit.keys.redo"></span></div>
+        </div>
+      </section>
+    </aside>
+  </main>
+</div>
+<script src="strings.js"></script>
+<script src="/icons.js"></script>
+<script src="edits_sync.js"></script>
+<script src="dialog_ui.js"></script>
+<script src="page_util.js"></script>
+<script>
+// The editor only runs inside the app (its Edit step; exporting happens in the app's Export step). The old standalone
+// editor -- its own People list, merge, delete-person, Render video -- was removed (2026-11-12): grouping happens in
+// Decisions and People.
+i18n();  // the page's own text (strings.js)
+const $ = (id) => document.getElementById(id);
+const view = $("view"), ctx = view.getContext("2d");
+const tl = $("timeline"), tctx = tl.getContext("2d");
+
+let S = null;            // server init payload
+let edits = null;        // this page's working copy; the server owns the edits (edits_sync.js)
+const SYNC = EditSync.connect("api/");
+let resolved = [], hiddenBy = [];  // hiddenBy[t]: boxes answered Not a face / Not a real person
+function setHidden(list) {
+  hiddenBy = [];
+  for (const [t, tid, cx, cy, s, kind, piece] of list || []) (hiddenBy[t] ||= []).push([tid, cx, cy, s, kind, piece]);
+}
+const hiddenAt = (t) => hiddenBy[t] || [];
+const isHiddenPiece = (p) => (edits.not_face && p in edits.not_face) || (edits.not_real || []).includes(p);
+// one colour per person, so a dashed "not a face" box shows whose it is
+const personHue = (tid) => { let h = 0; for (const ch of String(tid)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return `hsl(${h % 360} 75% 62%)`; };
+let cur = 0, zoom = 1, showEmoji = true, playing = false, playTimer = null;
+// The editor's plug-ins (light_ui.js, emoji_set_ui.js, pose_ui.js, depth_ui.js) draw on the frame or keep their panel
+// in step after each draw: afterDraw(fn), run in the order they register.
+const AFTER_DRAW = [];
+window.afterDraw = (fn) => AFTER_DRAW.push(fn);
+const esc = (x) => String(x ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+let selected = null, selPiece = null;  // selected = person (canonical id), selPiece = the clicked track piece
+const imgs = new Map();
+
+// emoji: page_util.js emojiFor / paletteFor (the set is picked in emoji_set_ui.js; palettes.py makes the same choice)
+
+// ---- frames
+function frameURL(t) { return `${S.frames.replace(/^\//, "")}/${String(t).padStart(5, "0")}.jpg`; }
+function getImg(t) {
+  if (!imgs.has(t)) {
+    const im = new Image(); im.fetchPriority = t === cur ? "high" : "low";
+    im.onload = () => { if (t === cur) draw(); }; im.src = frameURL(t); imgs.set(t, im);
+  }
+  return imgs.get(t);
+}
+// What you see is the export: with covers on (View: emoji), each frame is drawn by the export's own code on
+// the server (/api/frame, ~10 ms) and only the editing layer (boxes, labels, selection) is drawn here. RVER
+// goes up after every save so the frames follow your edits. The local drawing below (emoji text, lighting,
+// blur) is only a stand-in for the moment a frame is still loading or while a lighting slider is dragged.
+let RVER = 0, LASTPIC = null, LASTT = 0;
+const rendered = new Map();  // t -> {key, im}
+function getRendered(t) {
+  const key = `${RVER}:${coverStyle()}`;
+  let e = rendered.get(t);
+  if (!e || e.key !== key) {
+    const im = new Image(); im.fetchPriority = t === cur ? "high" : "low";
+    im.onload = () => { if (t === cur) draw(); };
+    im.src = `api/frame/${t}?style=${coverStyle()}&strict=0&v=${RVER}`;
+    rendered.set(t, (e = { key, im }));
+  }
+  return e.im;
+}
+function readyRendered(t) {  // the export frame for t if it's already downloaded (current edits/style), else null
+  const e = rendered.get(t);
+  return e && e.key === `${RVER}:${coverStyle()}` && e.im.complete && e.im.naturalWidth ? e.im : null;
+}
+const exactView = () => showEmoji && !(window.LightUI && LightUI.dragging && LightUI.dragging());
+// Jumping far (dragging along the timeline) used to queue ~100 downloads at every position passed, so the
+// frame you stopped on waited behind all of them: seconds of black. Now a jump cancels downloads that are no
+// longer near the playhead, fetches the frame you're on first, and reads ahead only once you've stopped.
+function dropStale(t, ahead = 45, behind = 10) {
+  for (const m of [imgs, rendered]) for (const [k, v] of m) {
+    const im = v.im || v;
+    if (!im.complete && (k < t - behind || k > t + ahead)) { im.onload = null; im.src = ""; m.delete(k); }
+  }
+}
+let readAhead = null;
+function preload(t, ahead = 40, behind = 10) {
+  for (let u = Math.max(0, t - behind); u < Math.min(S.n, t + ahead); u++) { getImg(u); if (exactView()) getRendered(u); }
+  if (rendered.size > 300) for (const k of rendered.keys()) { if (Math.abs(k - t) > 120) rendered.delete(k); if (rendered.size < 200) break; }
+  if (imgs.size > 600) for (const k of imgs.keys()) { if (Math.abs(k - t) > 200) imgs.delete(k); if (imgs.size < 400) break; }
+}
+
+// ---- server
+async function api(path, body) {  // throws with the server's message when it refuses (or isn't answering)
+  const r = await fetch(path, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || j.error) throw new Error(j.error || t("common.err.server_answered", { status: r.status }));
+  return j;
+}
+async function commit(mutator) {
+  mutator(edits);
+  await sync();
+}
+// send what changed (edits_sync.js); the server keeps the undo history
+async function sync() { try { took(await SYNC.push(edits)); refreshDecisions(); } catch (err) { await saveFailed(err); } }
+// a save the server refused (or never got): say so, and go back to the server's copy rather than keep editing
+// changes that aren't saved
+async function saveFailed(err) {
+  let back = false;
+  try { took(await SYNC.reset()); back = true; } catch (e) { /* the server isn't answering: the next save sends them again */ }
+  Dialog.tell(t("common.err.save", { error: err.message }) + (back ? "\n\n" + t("edit.err.reverted") : ""));
+}
+function took(st) {
+  edits = st.edits;
+  RVER++;  // the server has the new edits: frames drawn from now on show them
+  resolved = st.resolved; setHidden(st.hidden);
+  refreshSelected();
+  drawTimeline(); draw(); renderSel();
+}
+// an edit or undo can change the decision records the panel's Decisions block shows ("not a face · yours")
+function refreshDecisions() {
+  api("api/decisions").then((r) => { if (r?.decisions) { DECS = r.decisions; renderSel(); } }).catch(() => {});
+}
+// The selected box's person id can change under it (giving it an emoji makes it a named person "@3"); keep the
+// selection on the box's CURRENT person, or the next action would act on a person that no longer exists.
+function refreshSelected() {
+  if (selPiece === null) return;
+  for (const f of resolved) for (const x of f) if (x[5] === selPiece) { selected = x[0]; return; }
+  for (const f of hiddenBy) for (const x of f || []) if (x[5] === selPiece) { selected = x[0]; return; }
+}
+// ⌘Z: the server undoes the last saved change, whichever page made it (a Decisions answer included); ⇧⌘Z redoes it
+async function undo() { try { took(await SYNC.undo(edits)); refreshDecisions(); } catch (err) { await saveFailed(err); } }
+async function redo() { try { took(await SYNC.redo(edits)); refreshDecisions(); } catch (err) { await saveFailed(err); } }
+window.undo = undo; window.redo = redo;  // (the app's Edit menu calls these while Edit is showing)
+// catch up with changes saved by another page or window (Decisions, People, a second editor), and with the decision
+// records they change (the panel's Decisions block)
+async function refreshEdits() {
+  let r = null;
+  try { r = await SYNC.pull(edits); } catch (err) { return; }  // the server is busy or restarting: the next look tries again
+  if (!r) return;
+  DECS = (await api("api/decisions").catch(() => null))?.decisions || DECS;
+  took(r);
+}
+window.refreshEdits = refreshEdits;
+window.addEventListener("focus", refreshEdits);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshEdits(); });
+
+// ---- geometry (source px)
+const sq = (cx, cy, s) => [cx - s / 2, cy - s / 2, cx + s / 2, cy + s / 2];
+function boxesAt(t) { return resolved[t] || []; }
+function toSrc(ev) {
+  const r = view.getBoundingClientRect();
+  return [(ev.clientX - r.left) / zoom, (ev.clientY - r.top) / zoom];
+}
+
+// ---- drawing
+function layout() {
+  if (!S) return;  // (a resize before the project has loaded)
+  const stage = $("stage").getBoundingClientRect();
+  zoom = Math.min((stage.height - 16) / S.h, (stage.width - 16) / S.w, 2.5);
+  view.width = Math.round(S.w * zoom); view.height = Math.round(S.h * zoom);
+  tl.width = tl.clientWidth * devicePixelRatio; tl.height = tl.clientHeight * devicePixelRatio;
+  draw(); drawTimeline();
+}
+function strokeBox(b, color, width = 1.5, dash = []) {
+  ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = width; ctx.setLineDash(dash);
+  ctx.strokeRect(b[0] * zoom, b[1] * zoom, (b[2] - b[0]) * zoom, (b[3] - b[1]) * zoom); ctx.restore();
+}
+function label(text, x, y, color) {
+  ctx.save(); ctx.font = "11px -apple-system, sans-serif"; ctx.fillStyle = "rgba(0,0,0,.6)";
+  const w = ctx.measureText(text).width + 6; ctx.fillRect(x * zoom, y * zoom - 14, w, 14);
+  ctx.fillStyle = color; ctx.fillText(text, x * zoom + 3, y * zoom - 3); ctx.restore();
+}
+const KIND_COLOR = { obs: "var(--obs)", coast: "var(--coast)", manual: "var(--manual)" };
+function css(v) { return v.startsWith("var(") ? getComputedStyle(document.documentElement).getPropertyValue(v.slice(4, -1)).trim() : v; }
+
+// How faces are covered (edits.cover_style, shared with Export): emoji ("mojimask"), or blur / pixelate / solid circles drawn
+// like track.cover() in the export.
+const COVER_STYLES = [["emoji", t("style.emoji"), t("style.emoji.hint")], ["blur", t("style.blur"), t("style.blur.hint")],
+                      ["pixelate", t("style.pixelate"), t("style.pixelate.hint")], ["solid", t("style.solid"), t("edit.style_tip.solid")],
+                      ["portrait", t("style.portrait"), t("edit.style_tip.portrait")]];
+const coverStyle = () => (edits && edits.cover_style) || "emoji";
+function drawStylePick() {
+  const el = $("stylepick"), st = coverStyle();
+  if (el._st !== st) {
+    el._st = st;
+    el.innerHTML = COVER_STYLES.map(([k, l, tip]) => `<button data-k="${k}" class="${k === st ? "on" : ""}" title="${tip}">${l}</button>`).join("");
+    for (const b of el.querySelectorAll("button")) b.onclick = () => { if (b.dataset.k !== coverStyle()) commit((e) => { e.cover_style = b.dataset.k; }); };
+  }
+  { const x = $("emojiset"); if (x) x.classList.toggle("hidden", st !== "emoji"); }  // emoji-only settings
+  $("portraitrow").classList.toggle("hidden", st !== "portrait");
+  if (st === "portrait" && $("portraitimg")._k !== edits.portrait) portraitPic();
+  { const x = $("lightsec"); if (x) x.classList.toggle("hidden", st !== "emoji" && st !== "portrait"); }  // shades pasted pictures
+}
+let pixCv = null, EXT = null;
+// The frame at view size with its edge pixels stretched outward by pad. A canvas blur (and a pixelate block)
+// treats everything outside the picture as transparent, so a cover near the edge of the video would turn
+// see-through and show the sharp face drawn underneath; working from this copy, they only ever see picture.
+function extended(im, need) {
+  const w = view.width, h = view.height;
+  if (EXT && EXT.im === im && EXT.w === w && EXT.h === h && EXT.pad >= need) return EXT;
+  const pad = Math.ceil(need / 64) * 64, cv = document.createElement("canvas");
+  cv.width = w + 2 * pad; cv.height = h + 2 * pad;
+  const g = cv.getContext("2d"), W = im.naturalWidth, H = im.naturalHeight;
+  g.drawImage(im, pad, pad, w, h);
+  g.drawImage(im, 0, 0, W, 1, pad, 0, w, pad); g.drawImage(im, 0, H - 1, W, 1, pad, pad + h, w, pad);    // top, bottom
+  g.drawImage(im, 0, 0, 1, H, 0, pad, pad, h); g.drawImage(im, W - 1, 0, 1, H, pad + w, pad, pad, h);    // left, right
+  for (const [sx, sy, dx, dy] of [[0, 0, 0, 0], [W - 1, 0, pad + w, 0], [0, H - 1, 0, pad + h], [W - 1, H - 1, pad + w, pad + h]])
+    g.drawImage(im, sx, sy, 1, 1, dx, dy, pad, pad);                                                      // corners
+  return (EXT = { im, w, h, pad, cv });
+}
+function drawCover(im, style, x, y, d) {  // x, y, d in view pixels
+  const r = d / 2;
+  ctx.save(); ctx.beginPath(); ctx.arc(x, y, r, 0, 2 * Math.PI); ctx.clip();
+  if (style === "solid" || !(im.complete && im.naturalWidth)) { ctx.fillStyle = "rgb(40,40,40)"; ctx.fillRect(x - r, y - r, d, d); }
+  else if (style === "blur") {
+    const sigma = Math.max(2, r / 3), E = extended(im, Math.max(3 * sigma, r) + 4);
+    ctx.filter = `blur(${sigma}px)`; ctx.drawImage(E.cv, -E.pad, -E.pad);
+  } else {  // pixelate: about 5 blocks across the face
+    const E = extended(im, r + 4);
+    pixCv = pixCv || document.createElement("canvas"); pixCv.width = 5; pixCv.height = 5;
+    const p = pixCv.getContext("2d"); p.imageSmoothingEnabled = true;
+    p.drawImage(E.cv, x - r + E.pad, y - r + E.pad, d, d, 0, 0, 5, 5);
+    ctx.imageSmoothingEnabled = false; ctx.drawImage(pixCv, x - r, y - r, d, d);
+  }
+  ctx.restore();
+}
+// The export's own emoji picture (track.emoji_sprite: cropped to its ink, filling the box), so a frame drawn
+// here while its export frame loads shows the emoji at the same size and place -- the browser's text emoji
+// is ~86% of the box and sits higher, which made emoji pulse in size while scrubbing.
+const SPRITES = new Map();
+function emojiSprite(ch) {
+  let im = SPRITES.get(ch);
+  if (!im) { im = new Image(); im.onload = () => draw(); im.src = `api/sprite/${encodeURIComponent(ch)}`; SPRITES.set(ch, im); }
+  return im.complete && im.naturalWidth ? im : null;
+}
+window.emojiSprite = emojiSprite;
+// Where each emoji's eyes are (emoji_eyes.json), so a cover's eyes sit on the person's: the same sums as
+// track.eye_fit (keep the constants in step). [move down, in face sizes; grow].
+const EYE_KEEP = 0.06, EYE_GROW_MAX = 1.2, EYE_FITS = new Map();
+let EYES = null;
+fetch("emoji_eyes.json").then((r) => r.json()).then((j) => { EYES = j; EYE_FITS.clear(); draw(); }).catch(() => {});
+function eyeFit(ch, scale) {
+  const e = EYES && EYES.eye_y[ch];
+  if (e == null || !(scale > 0)) return [0, 1];
+  const k = ch + "|" + scale;
+  if (!EYE_FITS.has(k)) {
+    const h = 0.5 / scale, m = EYE_KEEP / scale, r = EYES.reference / scale;
+    const g = Math.min(EYE_GROW_MAX, Math.max(1, (h + m - r) / (1 - e), (r + h + m) / e));
+    const lo = h + m - g / 2, hi = g / 2 - h - m;
+    const d = lo <= hi ? Math.min(Math.max(r - g * (e - 0.5), lo), hi) : 0;
+    EYE_FITS.set(k, [d * scale, g]);
+  }
+  return EYE_FITS.get(k);
+}
+// Portrait style: the project's photo (edits.portrait, a cut-out the server made from the chosen file) as drawn
+// on every head; the thumbnail beside "Choose photo…" and the stand-in while a frame first loads.
+let PORTRAIT = null;
+function portraitPic() {
+  const k = edits.portrait || "", src = `api/portrait?k=${encodeURIComponent(k)}`;
+  $("portraitimg")._k = edits.portrait; $("portraitimg").src = src;
+  PORTRAIT = new Image(); PORTRAIT.onload = () => draw(); PORTRAIT.src = src;
+}
+$("portraitpick").onclick = () => $("portraitfile").click();
+$("portraitfile").onchange = async () => {
+  const file = $("portraitfile").files[0]; $("portraitfile").value = "";
+  if (!file) return;
+  const msg = $("portraitmsg"), btn = $("portraitpick");
+  msg.textContent = t("edit.portrait.finding"); btn.disabled = true;
+  try {
+    const data = await new Promise((ok, bad) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = bad; r.readAsDataURL(file); });
+    const res = await api("api/portrait", { data });
+    await commit((e) => { e.portrait = res.file; });
+    msg.textContent = t("edit.portrait.using", { name: file.name });
+  } catch (err) { msg.textContent = (err && err.message) || t("edit.portrait.failed"); }
+  finally { btn.disabled = false; }
+};
+function draw() { drawView(); for (const fn of AFTER_DRAW) fn(); }
+function drawView() {
+  syncCorr();
+  if (!S) return;
+  drawStylePick();
+  const im = getImg(cur), rim = exactView() ? getRendered(cur) : null;
+  let exact = !!(rim && rim.complete && rim.naturalWidth);  // the export's own frame, covers included
+  let pic = exact ? rim : null, ft = cur;  // ft: the frame number of the picture actually on screen
+  if (!exact && exactView()) {
+    // The export frame for here isn't in yet. Never fall back to the bare video (uncovered faces) or a dimmed
+    // or local stand-in picture (no pose/lighting -> flicker): show the newest finished export frame at or just
+    // before the playhead (playback drops the frames that didn't make it), else hold the last one shown.
+    for (let u = cur - 1; u >= Math.max(0, cur - 90); u--) { const r = readyRendered(u); if (r) { pic = r; ft = u; break; } }
+    if (!pic && LASTPIC) { pic = LASTPIC; ft = LASTT; }
+    exact = !!pic;
+  }
+  const have = exact || (im.complete && im.naturalWidth);
+  if (!have) return;  // nothing at all yet (first load): leave the canvas as is
+  ctx.clearRect(0, 0, view.width, view.height);
+  if (exact) { ctx.drawImage(pic, 0, 0, view.width, view.height); LASTPIC = pic; LASTT = ft; }
+  else ctx.drawImage(im, 0, 0, view.width, view.height);  // local stand-in: covers are drawn below
+  for (const [tid, cx, cy, s, kind, piece, shownP] of [...boxesAt(ft)].sort((p, q) => p[3] - q[3])) {  // small (far) first, large (near) on top
+    const b = sq(cx, cy, s * S.scale);
+    ctx.save();
+    if (shownP) {  // whitelisted person: tracked as a face, not masked
+      const isSelS = selPiece === piece;
+      strokeBox(b, isSelS ? "#fff" : "#c9c9c9", isSelS ? 3 : 1.5, [2, 3]);
+      label(t("edit.box.shown", { piece }), b[0], b[1], isSelS ? "#fff" : "#c9c9c9");
+      ctx.restore(); continue;
+    }
+    if (exact) {}  // already drawn by the export's code
+    else if (showEmoji && coverStyle() === "portrait") {  // first-load stand-in only: the photo, flat
+      const size = s * S.scale * zoom, sp = PORTRAIT && PORTRAIT.complete && PORTRAIT.naturalWidth ? PORTRAIT : null;
+      if (sp) ctx.drawImage(sp, cx * zoom - size / 2, cy * zoom - size / 2, size, size);
+      else drawCover(im, "solid", cx * zoom, cy * zoom, size);
+    }
+    else if (showEmoji && coverStyle() !== "emoji") drawCover(im, coverStyle(), cx * zoom, cy * zoom, s * S.scale * zoom);
+    else if (showEmoji) {
+      const ch = emojiFor(tid, edits), [mv, gr] = eyeFit(ch, S.scale);  // eyes on the person's eyes, as the export
+      const size = s * S.scale * gr * zoom, ex = cx * zoom, ey = (cy + mv * s) * zoom;
+      // light_ui.js: scene-matched lighting preview (returns false when off -> flat emoji)
+      if (!(window.LightUI && LightUI.drawEmoji(ctx, ch, piece, cur, ex, ey, size))) {
+        const sp = emojiSprite(ch);
+        if (sp) ctx.drawImage(sp, ex - size / 2, ey - size / 2, size, size);  // as the export pastes it
+        else {
+          ctx.save(); ctx.font = `${size * 0.86}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
+          ctx.textAlign = "center"; ctx.textBaseline = "middle";
+          ctx.fillText(ch, ex, ey + size * 0.04); ctx.restore();
+        }
+      }
+    }
+    ctx.restore();
+    const isSel = selPiece === piece || (selected === tid && selPiece === null);
+    const samePerson = !isSel && selected === tid;
+    strokeBox(b, isSel ? "#fff" : samePerson ? "#bbb" : css(KIND_COLOR[kind]), isSel ? 3 : 1.5, kind === "coast" || samePerson ? [4, 3] : []);
+    if (!showEmoji || isSel) label(`${piece}${tid !== piece ? " (" + tid + ")" : ""}${kind === "coast" ? " " + t("edit.box.held") : ""}`, b[0], b[1], isSel ? "#fff" : css(KIND_COLOR[kind]));
+  }
+  for (const [tid, cx, cy, s, kind, piece] of hiddenAt(ft)) {
+    if ((edits.not_face || {})[piece] === "decision" && showEmoji && selPiece !== piece) continue;  // V shows them
+    const b = sq(cx, cy, s * S.scale), isSel = selPiece === piece, mine = selected === tid;
+    ctx.save(); ctx.globalAlpha = isSel ? 1 : mine ? 0.85 : 0.55;
+    const col = isSel ? "#fff" : personHue(tid);
+    strokeBox(b, col, isSel ? 2.5 : 1.5, [3, 4]);
+    label(t("edit.box.not_face") + (edits.not_real && edits.not_real.includes(piece) ? " " + t("edit.box.not_real") : ""), b[0], b[1], col);
+    ctx.restore();
+  }
+  if (drag) {
+    const [x0, y0] = drag.a, [x1, y1] = drag.b;
+    const s = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0));
+    strokeBox(sq((x0 + x1) / 2, (y0 + y1) / 2, s), css("var(--manual)"), 2, [6, 3]);
+  }
+  const sec = cur / S.fps;
+  // which picture this is: the export's own frame, the quick local stand-in, or the frame without covers
+  const shown_ = !showEmoji ? t("edit.pic.no_covers") : !exact ? t("edit.pic.quick") : ft === cur ? t("edit.pic.export") : t("edit.pic.catching_up", { frame: ft });
+  $("frameinfo").textContent = S.photo ? "" : t("edit.frame_info", { frame: cur, last: S.n - 1, s: sec.toFixed(2) });
+  $("framenote").textContent = `${coverStyle() === "emoji" ? t("edit.count_emoji", { n: boxesAt(cur).length }) : t("edit.count_covers", { n: boxesAt(cur).length })} · ${shown_}`;
+}
+
+function drawTimeline() {
+  if (!S) return;
+  // The bar under the video: one small box per face covered at that moment, stacked, so its height reads as
+  // "how many faces here". Frames are grouped into columns a few pixels wide (each showing its busiest frame).
+  const W = tl.width, H = tl.height, dpr = devicePixelRatio;
+  tctx.clearRect(0, 0, W, H);
+  const cols = Math.max(1, Math.min(S.n, Math.floor(W / (6 * dpr)))), cw = W / cols, per = S.n / cols;
+  // each column: its busiest frame's boxes by kind (detected, then held, then yours), so the colours say where
+  // the covers are sure and where they're carried or drawn by hand
+  const ORDER = ["obs", "coast", "manual"], TINT = { obs: css("var(--obs)") + "80", coast: css("var(--coast)") + "B3", manual: css("var(--manual)") + "B3" };  // (6-digit hex)
+  const kinds = Array.from({ length: cols }, (_, i) => {
+    let best = [];
+    for (let t = Math.floor(i * per); t < Math.min(S.n, Math.floor((i + 1) * per) || 1); t++) if ((resolved[t] || []).length > best.length) best = resolved[t];
+    return best.map((b) => (ORDER.includes(b[4]) ? b[4] : "obs")).sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b));
+  });
+  const counts = kinds.map((k) => k.length);
+  const pad = 3 * dpr, gap = Math.max(1, dpr), maxc = Math.max(4, ...counts);
+  const bh = (H - 2 * pad) / maxc;
+  for (let i = 0; i < cols; i++) for (let k = 0; k < counts[i]; k++) {
+    tctx.fillStyle = TINT[kinds[i][k]];
+    tctx.fillRect(i * cw + gap / 2, H - pad - (k + 1) * bh + gap / 2, Math.max(1, cw - gap), Math.max(1, bh - gap));
+  }
+  tctx.fillStyle = css("var(--accent)"); tctx.fillRect((cur + 0.5) * (W / S.n) - dpr, 0, 2 * dpr, H);
+}
+
+// ---- side panel
+function renderSel() {
+  const el = $("selbody");
+  if (selected === null) { el.className = "muted"; el.textContent = t("edit.sel.none"); return; }
+  el.className = "";
+  return renderSelApp(el);
+}
+
+// ---- the decision records behind a box: what each rule or answer said
+let DECS = null;
+const baseOf = (p) => String(p).replace(/[~@].*$/, "");
+function decsFor(p) {
+  const b = baseOf(p);
+  return (DECS || []).filter((d) => String(d.about.piece) === b || String(d.about.person) === b);
+}
+function decBlock(p) {
+  if (!DECS) return "";
+  const ds = decsFor(p), b = baseOf(p);
+  const row = (d) => {
+    const mine = String(d.about.piece) === b, who = d.by === "user" ? "you" : d.by ? "rule" : "open";
+    const what = d.kind === "overlap" ? (mine ? t("edit.decs.stuck_to", { person: d.about.person }) : t("edit.decs.stuck_to_it", { piece: d.about.piece })) : d.kind;
+    return `<div class="d"><span class="k">${esc(what)}</span><span class="a">${esc(d.answer ?? t("edit.decs.not_answered"))}</span>
+      <span class="by ${who}" title="${esc(d.by || t("edit.decs.open_question"))}">${who === "rule" ? t("edit.decs.by_rule") : who === "you" ? t("edit.decs.by_you") : t("edit.decs.by_open")}</span></div>`;
+  };
+  return `<div class="decs"><b>${t("edit.decs.title")}</b>
+    ${ds.length ? ds.slice(0, 6).map(row).join("") + (ds.length > 6 ? `<div class="muted">${t("edit.decs.more", { n: ds.length - 6 })}</div>` : "")
+      : `<div class="muted">${t("edit.decs.none", { piece: esc(b) })}</div>`}
+    <div class="row"><button onclick="openDecisions()" title="R">${t("edit.decs.open")}</button></div></div>`;
+}
+// the app's People step: open the editor on a box (its face strip)
+window.selectPiece = (piece) => {
+  piece = String(piece);  // ids are strings here; the decision records keep some as numbers
+  const x = (resolved[cur] || []).find((r) => r[5] === piece) || hiddenAt(cur).find((r) => r[5] === piece);
+  if (!x) return;
+  selected = x[0]; selPiece = piece; renderSel(); draw();
+};
+function openDecisions() {
+  if (selPiece === null) return;
+  const piece = baseOf(selPiece);
+  if (window.parent !== window) window.parent.postMessage({ pa: "showDecisions", piece }, location.origin);  // the app's Decisions step
+  else window.open(`decisions.html#piece=${encodeURIComponent(piece)}`, "pa-decisions");
+}
+
+// Who's who is answered in Decisions; the editor keeps what needs scrubbing: covering a missed face, fixing a path,
+// splitting a box at the frame it changes person, the emoji, and who's shown.
+function renderSelApp(el) {
+  const who = esc(personLabel(selected));  // (a name typed in People: HTML-escaped, it goes into the panel's HTML)
+  const man = edits.manual[selPiece], hidden = isHiddenPiece(selPiece);
+  const frames = resolved.reduce((a, f, t) => (f.some((x) => x[5] === selPiece) || hiddenAt(t).some((x) => x[5] === selPiece) ? (a.push(t), a) : a), []);
+  const span = frames.length ? t("edit.sel.span", { from: (frames[0] / S.fps).toFixed(1), to: (frames[frames.length - 1] / S.fps).toFixed(1) }) : "";
+  // a toggle, either way, any time (Del flips it)
+  const notReal = (edits.not_real || []).includes(selPiece);
+  const toggle = `<div class="seg2">
+      <button class="${hidden ? "" : "on"}" onclick="act('restore')" title="${t("edit.sel.their_face_tip", { who })}">${t("edit.sel.their_face")}</button>
+      <button class="${hidden ? "on no" : ""}" onclick="act('notface')" title="${t("edit.sel.not_face_tip", { who })}">${notReal ? t("edit.sel.not_real") : t("edit.sel.not_face")}</button>
+    </div><span class="muted" style="font-size:11px">${t("edit.sel.del_flips")}</span>`;
+  if (hidden) {
+    const why = edits.not_face?.[selPiece] && edits.not_face[selPiece] !== "you"
+      ? " " + t("edit.sel.computers_call", { why: esc({ head: t("edit.not_face_why.head"), body: t("edit.not_face_why.body"), dup: t("edit.not_face_why.dup"), huge: t("edit.not_face_why.huge"), decision: t("edit.not_face_why.decision") }[edits.not_face[selPiece]] || edits.not_face[selPiece]) }) : "";
+    el.innerHTML = `<div style="font-size:14px"><b>${who}</b> · ${t("edit.sel.box", { piece: esc(selPiece) })} · ${span}</div>
+      <div class="row" style="align-items:center">${toggle}</div>
+      <div class="muted" style="margin:4px 0">${t("edit.sel.no_emoji", { why })}</div>
+      <div class="row"><button onclick="act('splitHere')" title="${t("edit.sel.split_tip")}">${t("edit.sel.split")}</button></div>
+      ${decBlock(selPiece)}`;
+    return;
+  }
+  el.innerHTML = `<div style="font-size:22px">${emojiFor(selected, edits)} <span style="font-size:13px"><b>${who}</b> · ${t("edit.sel.box", { piece: esc(selPiece) })}${man ? " " + t("edit.sel.by_hand") : ""} · ${span}</span></div>
+    <div class="row" style="align-items:center">${toggle}</div>
+    <div class="row">
+      <button onclick="act('splitHere')" title="${t("edit.sel.split_tip_answer")}">${t("edit.sel.split")}</button>
+      <button onclick="act('trimStart')" title="${t("edit.sel.trim_start_tip")}">${t("edit.sel.trim_start")}</button>
+      <button onclick="act('trimEnd')" title="${t("edit.sel.trim_end_tip")}">${t("edit.sel.trim_end")}</button>
+      <button onclick="act('emoji')">${t("edit.sel.emoji")}</button>
+      <button onclick="act('toggleShow')" title="U">${isShown(selected) ? t("edit.sel.mask_again") : t("edit.sel.unmask")}</button>
+    </div>
+    ${trimNote(selPiece)}
+    <div id="corr" class="muted" style="margin-top:4px"></div>
+    <div class="muted" style="margin-top:6px;font-size:12px">${man ? t("edit.sel.drag_correct") : t("edit.sel.drag_add")} ${t("edit.sel.why_here")}</div>
+    ${decBlock(selPiece)}`;
+  corrKey = ""; syncCorr();
+}
+function trimNote(piece) {  // "You started / ended this box at ..." with a way back
+  const r = edits.trims[piece]; if (!r) return "";
+  const start = (r[0] / S.fps).toFixed(1), end = (r[1] / S.fps).toFixed(1), s = r[0] > 0, e = r[1] < S.n - 1;
+  const what = s && e ? t("edit.trim.both", { start, end }) : s ? t("edit.trim.started", { start }) : e ? t("edit.trim.ended", { end }) : t("edit.trim.shortened");
+  return `<div class="muted" style="margin-top:4px">${what} · <a class="act" onclick="act('restoreLength')">${t("edit.trim.restore")}</a></div>`;
+}
+// Where you set a cover yourself (drew it, or dragged it to correct it): links to those moments, and on one of
+// them "Undo my correction here". Kept current as you scrub (draw calls it); the panel itself isn't redrawn.
+let corrKey = "";
+function syncCorr() {
+  const el = document.getElementById("corr"); if (!el) return;
+  const m = selPiece !== null && edits.manual[selPiece];
+  const ks = m ? Object.keys(m.keys).map(Number).sort((a, b) => a - b) : [];
+  const here = ks.includes(cur), key = JSON.stringify([selPiece, ks, here]);
+  if (key === corrKey) return;
+  corrKey = key;
+  if (!m) { el.innerHTML = ""; return; }
+  el.innerHTML = t("edit.corr.set_at", { times: ks.map((f) => `<a class="act" data-t="${f}">${t("unit.s", { n: (f / S.fps).toFixed(1) })}</a>`).join(", ") }) +
+    (here && ks.length > 1 ? ` · <button onclick="act('undoCorrection')" title="${t("edit.corr.undo_tip")}">${t("edit.corr.undo")}</button>`
+     : here ? " · " + t("edit.corr.first_set") : "");
+  for (const a of el.querySelectorAll("a[data-t]")) a.onclick = () => seek(+a.dataset.t);
+}
+
+// ---- actions
+// ---- people: edits.people = {pid: {name, pieces, show}}, resolved server-side to the stable id "@<pid>", so a
+// person's emoji (edits.emoji["@<pid>"]), name and show/mask choice survive re-runs and re-linking. Names and joins
+// are made in Decisions and People; the editor needs only these (and page_util.js pidOf, personOf).
+const personLabel = (tid) => { const P = personOf(tid, edits); return P && P.name ? P.name : pidOf(tid) ? t("edit.person", { n: pidOf(tid) }) : t("edit.unnamed", { id: tid }); };
+function isShown(person) {
+  { const P = personOf(person, edits); if (P) return !!P.show; }  // named Person: its flag
+  const ps = personPieces(person);
+  return ps.length > 0 && ps.every((p) => (edits.shown || []).includes(p));
+}
+function personPieces(person) {
+  const set = new Set();
+  for (const f of resolved) for (const x of f) if (x[0] === person) set.add(x[5]);
+  return [...set];
+}
+// who's who and what's a face are facts (facts.py): the server works out the edits from them
+async function say(kind, pieces, value, extra = {}) {
+  await sync();
+  await api("api/facts", { facts: [{ kind, pieces, value, ...extra }], label: extra.label || kind, page: "edit" });
+  await refreshEdits();
+}
+// an action on the selected box (its buttons, its keys); what the server refuses is said in a dialog
+async function act(what) {
+  try { await doAct(what); } catch (err) { Dialog.tell(err.message); }
+}
+async function doAct(what) {
+  if (selected === null || selPiece === null) return;
+  refreshSelected();
+  const piece = selPiece, person = selected;
+  if (what === "trimStart") await commit((e) => { const r = e.trims[piece] || [0, S.n - 1]; e.trims[piece] = [cur, r[1]]; });
+  if (what === "trimEnd") await commit((e) => { const r = e.trims[piece] || [0, S.n - 1]; e.trims[piece] = [r[0], cur]; });
+  if (what === "trimStart" || what === "trimEnd") { renderSel(); draw(); return; }
+  if (what === "restoreLength") { await commit((e) => { delete e.trims[piece]; }); renderSel(); draw(); return; }
+  if (what === "undoCorrection" && edits.manual[piece]) {
+    await sync();
+    await api("api/undo_correction", { piece, t: cur });
+    await refreshEdits(); renderSel(); draw(); return;
+  }
+  if (what === "notface") {
+    // no emoji, but it stays this person's box (dashed)
+    if (isHiddenPiece(piece)) return;  // already off
+    await say("face", [piece], false, { why: "you", label: "not a face" });
+    renderSel(); draw(); return;
+  }
+  if (what === "restore") {
+    if (!isHiddenPiece(piece)) return;  // already their face
+    await say("face", [piece], true, { label: "a face" });
+    renderSel(); draw(); return;
+  }
+  if (what === "splitHere") {
+    const base = String(piece).split("~")[0];
+    if (base.startsWith("m")) {  // a cover (added by hand, or a covered "maybe" spot): the server splits it
+      await sync();
+      let r;
+      try { r = await api("api/split_cover", { piece, t: cur }); } catch (err) { Dialog.tell(t("edit.err.split", { piece, error: err.message })); return; }
+      await refreshEdits();
+      selPiece = r.new; renderSel(); draw(); return;
+    }
+    await commit((e) => { e.cuts = e.cuts || {}; e.cuts[base] = [...new Set([...(e.cuts[base] || []), cur])].sort((a, b) => a - b); });
+    const part = `${base}~${cur}`;  // split off: the new part is its own person (nothing joins it to the first)
+    selPiece = part; renderSel(); draw(); return;
+  }
+  if (what === "toggleShow") {  // unmask / mask: the person stays a real face (unlike Not a face)
+    const on = !isShown(person);
+    await say("show", personPieces(person), on, { label: on ? "unmask" : "mask" }); renderSel(); return;
+  }
+  if (what === "emoji") {
+    const P = paletteFor(edits), i = P.indexOf(emojiFor(person, edits));
+    await say("emoji", personPieces(person), P[(i + 1) % P.length], { label: "emoji" });
+  }
+
+}
+async function addManual(t, c) {
+  const { prop, ev, pv } = await api("api/propagate", { t, c });
+  const id = "m" + (Object.keys(edits.manual).reduce((m, k) => Math.max(m, +k.slice(1) || 0), 0) + 1);
+  await commit((e) => { e.manual[id] = { keys: { [t]: c }, prop, ev: ev || [], ...(pv ? { pv } : {}) }; });
+  selected = id; selPiece = id; renderSel(); draw();
+}
+async function setKey(id, t, c) {
+  const { prop, ev } = await api("api/propagate", { t, c });
+  await commit((e) => {
+    const m = e.manual[id]; m.keys[t] = c;
+    const ts = Object.keys(prop).map(Number);
+    if (ts.length) { const lo = Math.min(...ts), hi = Math.max(...ts);
+      for (const k of Object.keys(m.prop)) if (+k >= lo && +k <= hi) delete m.prop[k];
+      m.ev = (m.ev || []).filter((u) => u < lo || u > hi); }
+    Object.assign(m.prop, prop);
+    m.ev = [...new Set([...(m.ev || []), ...(ev || [])])].sort((a, b) => a - b);
+  });
+}
+// ---- navigation
+let playClock = null;  // {t0, f0}: playback time origin (performance.now(), frame)
+function seek(t, fromClock = false) {
+  cur = Math.max(0, Math.min(S.n - 1, t));
+  if (playing && !fromClock) playClock = { t0: performance.now(), f0: cur };  // jumped while playing: play on from here
+  if (!playing) {  // the frame you're on now; the frames around it once the playhead has stopped moving
+                   // (while playing, the play clock reads ahead itself)
+    dropStale(cur); getImg(cur); if (exactView()) getRendered(cur);
+    clearTimeout(readAhead); readAhead = setTimeout(() => preload(cur), 150);
+  }
+  draw(); drawTimeline();
+}
+function togglePlay() {
+  playing = !playing; $("play").innerHTML = Icon(playing ? "pause" : "play"); $("play").setAttribute("aria-label", playing ? t("common.pause") : t("common.play"));
+  clearInterval(playTimer);
+  // Playback follows the clock, not the server: each tick jumps to where the video should be by now. Frames
+  // the server hasn't delivered in time are dropped (their downloads cancelled) and draw() keeps showing the
+  // newest export frame that did arrive, so a slow machine plays choppier but in sync and never uncovered.
+  if (playing) {
+    if (cur >= S.n - 1) seek(0);  // Play at the end starts again from the beginning
+    playClock = { t0: performance.now(), f0: cur };
+    preload(cur, 45, 0);
+    playTimer = setInterval(() => {
+      const t = Math.min(S.n - 1, playClock.f0 + Math.floor((performance.now() - playClock.t0) / 1000 * S.fps));
+      if (t !== cur) { dropStale(t, 45, 0); preload(t, 45, 0); seek(t, true); }
+      if (t >= S.n - 1) togglePlay();
+    }, 1000 / S.fps / 2);
+  }
+}
+
+// ---- mouse
+let drag = null;
+view.addEventListener("mousedown", (ev) => { drag = { a: toSrc(ev), b: toSrc(ev) }; });
+window.addEventListener("mousemove", (ev) => { if (drag) { drag.b = toSrc(ev); draw(); } });
+window.addEventListener("mouseup", async (ev) => {
+  if (!drag) return;
+  const { a, b } = drag; drag = null;
+  const moved = Math.hypot(b[0] - a[0], b[1] - a[1]) * zoom > 6;
+  if (moved) {
+    const s = Math.max(Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1])) / S.scale;
+    const c = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, Math.max(s, 6)];
+    try {
+      if (selPiece !== null && edits.manual[selPiece]) await setKey(selPiece, cur, c);
+      else await addManual(cur, c);
+    } catch (err) { Dialog.tell(t("edit.err.place", { error: err.message })); }
+    return;
+  }
+  const [x, y] = a;
+  // hit-test emoji (smallest first), then boxes with no emoji
+  const hits = boxesAt(cur).filter(([, cx, cy, s]) => Math.abs(x - cx) <= s * S.scale / 2 && Math.abs(y - cy) <= s * S.scale / 2)
+    .sort((p, q) => p[3] - q[3]);
+  if (hits.length) {
+    const tid = hits[0][0], piece = hits[0][5];
+    selected = tid; selPiece = piece;
+    renderSel(); draw(); return;
+  }
+  const hh = hiddenAt(cur).filter(([, cx, cy, s]) => Math.abs(x - cx) <= s * S.scale / 2 && Math.abs(y - cy) <= s * S.scale / 2).sort((p, q) => p[3] - q[3]);
+  if (hh.length) { selected = hh[0][0]; selPiece = hh[0][5]; renderSel(); draw(); return; }
+  selected = selPiece = null; renderSel(); draw();
+});
+
+// ---- keys
+window.addEventListener("keydown", async (ev) => {
+  if (["INPUT", "TEXTAREA", "SELECT"].includes(ev.target.tagName) || ev.target.isContentEditable) return;
+  const k = ev.key;
+  if ((ev.metaKey || ev.ctrlKey) && k.toLowerCase() === "z") { ev.preventDefault(); return ev.shiftKey ? redo() : undo(); }
+  if (ev.metaKey || ev.ctrlKey || ev.altKey) return;  // ⌘S, ⌘[, ⌘⌫ … are the browser's, not the editor's keys
+  if (k === "ArrowRight") { ev.preventDefault(); seek(cur + (ev.shiftKey ? 10 : 1)); }
+  else if (k === "ArrowLeft") { ev.preventDefault(); seek(cur - (ev.shiftKey ? 10 : 1)); }
+  else if (k === " ") { ev.preventDefault(); togglePlay(); }
+  else if (k === "v" || k === "V") { showEmoji = !showEmoji; for (const b of $("viewbtn").children) { const on = (b.dataset.v === "covers") === showEmoji; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); } draw(); }
+  else if (k === "Escape") { selected = selPiece = null; renderSel(); draw(); }
+  else if (k === "Delete" || k === "Backspace") act(selPiece !== null && isHiddenPiece(selPiece) ? "restore" : "notface");
+  else if (k === "s" || k === "S") act("splitHere");
+  else if (k === "r" || k === "R") openDecisions();
+  else if (k === "[" || k === "]") act(k === "[" ? "trimStart" : "trimEnd");
+  else if (k === "k" || k === "K") { if (selPiece !== null && (edits.manual[selPiece]?.keys || {})[cur]) act("undoCorrection"); }
+  else if (k === "e" || k === "E") act("emoji");
+  else if (k === "u" || k === "U") act("toggleShow");
+});
+
+// ---- timeline scrub
+let scrubbing = false;
+const scrubTo = (ev) => { const r = tl.getBoundingClientRect(); seek(Math.round(((ev.clientX - r.left) / r.width) * (S.n - 1))); };
+tl.addEventListener("mousedown", (ev) => { scrubbing = true; scrubTo(ev); });
+window.addEventListener("mousemove", (ev) => { if (scrubbing) scrubTo(ev); });
+window.addEventListener("mouseup", () => { scrubbing = false; });
+
+// ---- developer mode: clean face / not-face labels for training
+$("exportlabels").onclick = async () => {
+  try {
+    const r = await api("api/export_labels");
+    $("labelstatus").innerHTML = `labels: ${r.faces} faces, ${r.not_faces} not-faces · <a href="${esc(r.file)}?v=${Date.now()}" target="_blank">labels_export.json</a>`;
+  } catch (err) { $("labelstatus").textContent = `Export labels failed: ${err.message}`; }
+};
+$("play").onclick = togglePlay;
+$("undo").onclick = undo;
+$("redo").onclick = redo;
+for (const b of $("viewbtn").children) b.onclick = () => { if ((b.dataset.v === "covers") !== showEmoji) window.dispatchEvent(new KeyboardEvent("keydown", { key: "v" })); };
+$("prevf").onclick = () => seek(cur - 1); $("nextf").onclick = () => seek(cur + 1);
+$("keysbtn").onclick = () => { const open = $("keys").classList.toggle("hidden"); $("keysbtn").setAttribute("aria-expanded", !open); };
+window.addEventListener("keydown", (ev) => { if (ev.key === "?" && !["INPUT", "TEXTAREA", "SELECT"].includes(ev.target.tagName)) $("keysbtn").click(); });
+drawIcons();
+window.addEventListener("resize", layout);
+window.act = act;
+
+(async () => {
+  S = await api("api/init");
+  if (S.photo) $("play").hidden = $("fstep").hidden = document.querySelector("footer").hidden = true;  // a photo: one frame, nothing to play or scrub
+  DECS = (await api("api/decisions").catch(() => null))?.decisions || [];
+  if (S.dev) document.body.classList.add("dev");  // developer mode (MOJIMASK_DEV=1): Export labels
+  document.body.append(Object.assign(document.createElement("script"), { src: "pose_ui.js" }));  // the pose overlay (button "Pose" / key B)
+  if (S.depth) document.body.append(Object.assign(document.createElement("script"), { src: "depth_ui.js" }));  // MOJIMASK_DEPTH
+  edits = Object.assign({ trims: {}, manual: {}, people: {} }, SYNC.adopt(S));
+  resolved = S.resolved; setHidden(S.hidden);
+  preload(0); layout(); renderSel();
+  if (S.notices && S.notices.length) {
+    const d = document.createElement("div");
+    d.className = "notice";
+    d.textContent = S.notices.join(" ");
+    document.getElementById("app").insertBefore(d, document.querySelector("main"));
+    document.getElementById("app").style.gridTemplateRows = "auto 1fr";
+  }
+})();
+</script>
+<script src="light_ui.js"></script>
+<script src="emoji_set_ui.js"></script>
+</body>
+</html>

@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title data-i18n="nav.people"></title>
+<!-- The app's People step: everyone the scan counted as a person, one card each. Everyone starts covered; here you
+     show someone who's happy to be seen, name them, or pick their emoji. Each is a fact about their boxes (facts.py),
+     as in the editor: the server works out edits.people and edits.emoji from them, so Edit and the export agree. -->
+<link rel="stylesheet" href="/theme.css">
+<script src="/brand.js"></script>
+<style>
+  main { padding: 24px 32px 28px; display: grid; gap: 20px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(212px, 1fr)); gap: 14px; }
+  .grid:empty { display: none; }
+  .card { overflow: hidden; display: flex; flex-direction: column; }
+  .card.shown { border-color: var(--good); }
+  .pic { position: relative; }
+  .pic canvas { width: 100%; aspect-ratio: 232 / 176; display: block; background: #000; }
+  .pic .em { position: absolute; right: 10px; bottom: 10px; width: 40px; height: 40px; padding: 0; justify-content: center; border-radius: 50%; font-size: 24px; line-height: 1;
+             background: #0D0B17E6; border: 1px solid #FFFFFF33; }
+  .pic .em:hover { border-color: var(--accent); transform: scale(1.06); }
+  .body { padding: 12px; display: grid; gap: 10px; }
+  .name { width: 100%; }
+  .seg button.on.show { background: color-mix(in srgb, var(--good) 16%, transparent); color: var(--good); }
+  .row { display: flex; flex-wrap: wrap; gap: 2px 8px; align-items: center; justify-content: space-between; font-size: 12px; color: var(--dim); }
+  .row .link { font-size: 12px; }
+  .palette { display: none; flex-wrap: wrap; gap: 2px; }
+  .palette.open { display: flex; } .palette button { border: 0; background: transparent; padding: 2px 3px; font-size: 22px; line-height: 1; border-radius: 6px; }
+  .palette button:hover { background: var(--raised); }
+  .strip { display: none; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+  .strip.open { display: grid; } .strip canvas { width: 100%; aspect-ratio: 1; border-radius: 8px; background: #000; cursor: zoom-in; }
+  .err { color: var(--bad); font-size: 12px; }
+  .ask { width: 100%; text-align: left; white-space: normal; border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .foot { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; padding: 14px 16px; border-radius: 12px; font-size: 13px; color: var(--dim); }
+  .foot .saved { display: flex; align-items: center; gap: 6px; color: var(--faint); margin-left: auto; } .foot .saved .ic { width: 14px; height: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="pagehead">
+    <div>
+      <h1><span data-i18n="nav.people"></span><span class="summary" id="count"></span></h1>
+      <p data-i18n="people.intro"></p>
+    </div>
+    <button class="primary next" id="nextbtn"><span data-i18n="people.next"></span> <i data-ic="arrow-right"></i></button>
+  </div>
+  <div class="grid" id="grid"></div>
+  <div class="grid" id="briefgrid"></div>
+  <div class="card foot"><span id="others"></span><span class="saved"><i data-ic="check" data-size="14"></i><span data-i18n="people.saved"></span></span></div>
+</main>
+<script src="strings.js"></script>
+<script src="/icons.js"></script>
+<script src="edits_sync.js"></script>
+<script src="page_util.js"></script>
+<script>
+i18n();  // the page's own text (strings.js)
+const $ = (id) => document.getElementById(id);
+const SYNC = EditSync.connect("api/");
+let S = null, edits = null, DECS = [];
+
+// people: the server's one list (S.persons: every covered person, kind scan / yours / short -- review_server
+// people_of); this page only adds what it draws (best picture, their moments)
+function people() {
+  const kindOf = new Map((S.persons || []).map((P) => [P.tid, P.kind])), by = new Map();
+  S.resolved.forEach((f, t) => {
+    for (const [tid, cx, cy, s, kind, piece, shown] of f) {
+      let p = by.get(tid);
+      if (!p) by.set(tid, (p = { tid, pieces: new Set(), frames: [], best: null, shown: false, kind: kindOf.get(tid) || "short" }));
+      p.pieces.add(piece); p.frames.push({ t, c: [cx, cy, s], kind, piece });
+      if (shown) p.shown = true;
+      const inside = cx - s / 2 >= 0 && cy - s / 2 >= 0 && cx + s / 2 <= (S.w || 1e9) && cy + s / 2 <= (S.h || 1e9);
+      const score = s * (kind === "obs" ? 2 : 1) * (inside ? 1 : 0.3);  // a face cut by the frame edge makes a poor picture
+      if (!p.best || score > p.best.score) p.best = { t, c: [cx, cy, s], score };
+    }
+  });
+  return [...by.values()].sort((a, b) => (a.kind === "short") - (b.kind === "short") || b.frames.length - a.frames.length);
+}
+
+// a square crop around the face (c = [cx, cy, side]), slid inside the frame so it isn't padded with black where it
+// can be; box: outline the face we mean (white, with a dark edge so it shows on light backgrounds too)
+async function paint(cv, t, c, k = 1.6, box = true) {
+  const im = await frame(t); if (!im) return;
+  // n points across and h down (data-h; square without it): the crop has the picture's shape, k face-widths to each side
+  const n = +cv.dataset.n || 240, h = +cv.dataset.h || n, g = hidpi(cv, n, h), hw = Math.max(c[2] * k, 24), hh = hw * h / n;
+  const slide = (v, half, size) => (2 * half >= size ? size / 2 : Math.min(Math.max(v, half), size - half));
+  const x = slide(c[0], hw, im.naturalWidth), y = slide(c[1], hh, im.naturalHeight), sc = n / (2 * hw);
+  g.fillStyle = "#000"; g.fillRect(0, 0, n, h);
+  g.drawImage(im, x - hw, y - hh, 2 * hw, 2 * hh, 0, 0, n, h);
+  if (!box) return;
+  const bx = (c[0] - c[2] / 2 - (x - hw)) * sc, by = (c[1] - c[2] / 2 - (y - hh)) * sc, bs = c[2] * sc;
+  const lw = Math.max(1.5, n / 160);
+  g.lineWidth = lw + 2; g.strokeStyle = "rgba(0,0,0,.6)"; g.strokeRect(bx, by, bs, bs);
+  g.lineWidth = lw; g.strokeStyle = "#fff"; g.strokeRect(bx, by, bs, bs);
+}
+
+// what you say about a person is a fact about their boxes (facts.py); the server works out the edits from them, and
+// its reply carries them (and who's who now), so the cards are redrawn from it
+async function say(p, kind, value, label) {
+  let r;
+  try {
+    const res = await fetch("api/facts", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ facts: [{ kind, pieces: [...p.pieces], value }], label, page: "people" }) });
+    r = await res.json().catch(() => ({}));
+    if (!res.ok || r.error) throw new Error(r.error || t("common.err.server_answered", { status: res.status }));
+  } catch (err) {  // said on the card itself
+    const msg = p.el.querySelector(".err") || p.el.querySelector(".body").appendChild(Object.assign(document.createElement("div"), { className: "err" }));
+    msg.textContent = t("people.err.save", { error: err.message });
+    return;
+  }
+  S = { ...S, ...r };
+  edits = SYNC.adopt(S);
+  render();
+}
+
+// open same-person questions involving this person
+const maybes = (p) => DECS.filter((d) => (d.kind === "same" || d.kind === "whose") && !d.by && (p.pieces.has(String(d.about.piece)) || p.pieces.has(String(d.about.person))));
+function card(p) {
+  const P = personOf(p.tid, edits), name = (P && P.name) || "", shown = P ? !!P.show : p.shown;
+  const el = document.createElement("div"); el.className = "card" + (shown ? " shown" : ""); el.dataset.tid = p.tid; p.el = el;
+  const secs = (p.frames.length / (S.fps || 30)).toFixed(1);
+  const decs = DECS.filter((d) => p.pieces.has(String(d.about.piece)) || p.pieces.has(String(d.about.person)));
+  el.innerHTML = `
+    <div class="pic"><canvas data-n="348" data-h="264"></canvas>${shown ? "" : `<button class="em" title="${t("people.pick_emoji")}" aria-label="${t("people.pick_emoji_now", { emoji: emojiFor(p.tid, edits) })}">${emojiFor(p.tid, edits)}</button>`}</div>
+    <div class="body">
+      <input class="name" placeholder="${t("people.name_placeholder")}" aria-label="${t("people.name_label")}" value="${name.replace(/"/g, "&quot;")}">
+      <div class="palette"></div>
+      <div class="seg fill" role="group" aria-label="${t("people.mask_label")}"><button class="cov ${shown ? "" : "on"}" aria-pressed="${!shown}">${t("people.masked")}</button><button class="shw ${shown ? "on show" : ""}" aria-pressed="${shown}">${t("people.unmasked_button")}</button></div>
+      <div class="row"><span>${S.photo ? "" : t("people.on_screen", { s: secs })}${p.pieces.size > 1 ? `${S.photo ? "" : " · "}${t("people.joined", { n: p.pieces.size })}` : ""}</span>
+        <span><button class="link faces">${t("people.their_faces")}</button>${decs.length ? ` · <button class="link why">${t("people.why")}</button>` : ""}</span></div>
+      <div class="strip"></div>
+      ${maybes(p).length ? `<button class="ask">${maybes(p).some((d) => d.kind === "whose") ? t("people.ask_whose") : t("people.ask_same")}</button>` : ""}
+    </div>`;
+  paint(el.querySelector(".pic canvas"), p.best.t, p.best.c, 1.4);
+  const pal = el.querySelector(".palette");
+  if (el.querySelector(".em")) el.querySelector(".em").onclick = () => {
+    if (!pal.children.length) for (const em of paletteFor(edits)) {
+      const b = document.createElement("button"); b.textContent = em;
+      b.onclick = () => say(p, "emoji", em, "emoji");
+      pal.append(b);
+    }
+    pal.classList.toggle("open");
+  };
+  el.querySelector(".name").onchange = (ev) => say(p, "name", ev.target.value.trim(), "name");
+  const show = (on) => say(p, "show", on, on ? "unmask" : "mask");
+  el.querySelector(".cov").onclick = () => shown && show(false);
+  el.querySelector(".shw").onclick = () => !shown && show(true);
+  const strip = el.querySelector(".strip");
+  el.querySelector(".faces").onclick = () => {
+    if (!strip.children.length) {  // up to 8 detected moments, spread over their time on screen
+      const det = p.frames.filter((f) => f.kind === "obs"), pick = det.length ? det : p.frames, n = Math.min(8, pick.length);
+      for (let i = 0; i < n; i++) {
+        const f = pick[Math.floor(i * pick.length / n)], cv = document.createElement("canvas"); cv.dataset.n = 240;
+        cv.title = t("people.strip_tip", { s: (f.t / (S.fps || 30)).toFixed(1) });
+        cv.onclick = () => window.parent !== window && window.parent.postMessage({ pa: "editAt", t: f.t, piece: f.piece }, location.origin);
+        cv.onmouseenter = () => paint(cv, f.t, f.c, 1.3, true);  // the box only on hover, so it doesn't hide the face
+        cv.onmouseleave = () => paint(cv, f.t, f.c, 1.3, false);
+        strip.append(cv); paint(cv, f.t, f.c, 1.3, false);
+      }
+    }
+    strip.classList.toggle("open");
+  };
+  const ask = el.querySelector(".ask");  // the open same-person question about them, answered on the Decisions page
+  if (ask) ask.onclick = () => { const d = maybes(p)[0], pc = p.pieces.has(String(d.about.piece)) ? d.about.piece : d.about.person;
+    if (window.parent !== window) window.parent.postMessage({ pa: "showDecisions", piece: pc }, location.origin); };
+  const why = el.querySelector(".why");
+  if (why) why.onclick = () => window.parent !== window && window.parent.postMessage({ pa: "showDecisions", piece: [...p.pieces][0] }, location.origin);
+  if (reopen.pal.has(p.tid) && el.querySelector(".em")) el.querySelector(".em").click();
+  if (reopen.strip.has(p.tid)) el.querySelector(".faces").click();
+  return el;
+}
+
+let OPEN_BRIEF = false;
+async function refresh() {
+  S = await (await fetch("api/init")).json();
+  edits = SYNC.adopt(S);
+  render();
+}
+// The cards, drawn again after each change; what was open on a card (its emoji choice, its faces) stays open, and
+// the control that had the focus keeps it.
+let reopen = { pal: new Set(), strip: new Set() };
+function render() {
+  const open = (sel) => new Set([...document.querySelectorAll(`.card ${sel}.open`)].map((x) => x.closest(".card").dataset.tid));
+  reopen = { pal: open(".palette"), strip: open(".strip") };
+  const f = document.activeElement, fc = f && f.closest && f.closest(".card[data-tid]"), focus = fc && f.classList[0] ? [fc.dataset.tid, f.classList[0]] : null;
+  const all = people(), ps = all.filter((p) => p.kind !== "short"), brief = all.filter((p) => p.kind === "short");
+  const shown = ps.filter((p) => (personOf(p.tid, edits) ? personOf(p.tid, edits).show : p.shown)).length;
+  $("count").textContent = `${ps.length} · ${shown ? t("people.unmasked", { n: shown }) : t("people.all_masked")}`;
+  if (window.parent !== window) window.parent.postMessage({ pa: "counts", people: ps.length }, location.origin);  // the app's tab shows it
+  $("grid").replaceChildren(...ps.map(card));
+  // the brief ones: masked like everyone, listed so one that is someone can be found (its questions link from it)
+  $("others").innerHTML = brief.length ? `${t("people.brief", { n: brief.length })} <button class="link accent" id="showbrief">${OPEN_BRIEF ? t("people.hide_brief") : t("people.show_brief")}</button>` : "";
+  $("briefgrid").replaceChildren(...(OPEN_BRIEF ? brief.map(card) : []));
+  if (brief.length) $("showbrief").onclick = () => { OPEN_BRIEF = !OPEN_BRIEF; render(); };
+  if (focus) document.querySelector(`.card[data-tid="${CSS.escape(focus[0])}"] .${CSS.escape(focus[1])}`)?.focus();
+}
+$("nextbtn").onclick = () => { if (window.parent !== window) window.parent.postMessage({ pa: "go", to: "edit" }, location.origin); };
+(async () => {
+  drawIcons();
+  await loadPresets();
+  DECS = ((await (await fetch("api/decisions")).json().catch(() => null)) || {}).decisions || [];
+  await refresh();
+})();
+</script>
+</body>
+</html>

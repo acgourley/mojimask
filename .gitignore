@@ -1,0 +1,70 @@
+# --- Python / tooling
+.venv*/
+__pycache__/
+*.pyc
+.DS_Store
+
+# --- build output (packaging/build_mac.sh regenerates all of it)
+build/
+dist/
+selftest_report.json
+
+# --- model weights: too big for git, and not all of them may be redistributed.
+# models/README.md lists each file, where it comes from, its licence and its SHA-256.
+models/**
+!models/README.md
+
+# --- people's faces: party videos, frames, crops and test photos never go in the repo
+out/
+test_clips/*
+*.mp4
+*.mov
+*.m4v
+*.MOV
+*.MP4
+*.heic
+*.HEIC
+# ...except the sample clip the app ships with (packaging/build_mac.sh bundles it)
+!test_clips/jazz.mp4
+web/assets/portrait_test.png
+web/assets/portrait_test.png.pose.json
+web/assets/portrait_default.png
+web/assets/portrait_default.png.pose.json
+web/assets/*.pose.json
+# every picture, wherever it is saved (a frame or crop written anywhere must not be committed by accident)...
+*.jpg
+*.jpeg
+*.png
+*.webp
+*.gif
+*.JPG
+*.JPEG
+*.PNG
+# ...except the app's own pictures (old paintings, public domain), listed by path
+!web/assets/gallery/*.jpg
+!web/assets/icon_art.jpg
+!web/assets/portrait_mona.png
+
+# --- finished research scripts, kept on disk but not in the repo: nothing in the app or the current
+# developer tools (AGENTS.md) imports them.
+# (face_signals/ also holds per-face scores computed from the party clips.)
+experiments/face_signals/
+experiments/layers/*
+!experiments/layers/l2_detect.py
+experiments/appearance_links.py
+experiments/appearance_spots.py
+experiments/body_tracks.py
+experiments/body_variants.py
+experiments/dinov2_appearance.py
+experiments/eval_tools.py
+experiments/face_vs_body.py
+experiments/gapfill.py
+experiments/identity_descriptors.py
+experiments/occluders.py
+experiments/persons.py
+experiments/probe.py
+experiments/motion.py
+experiments/proto/render.py
+
+# --- local editor / agent settings (paths on this machine)
+.claude/

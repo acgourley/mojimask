@@ -1,0 +1,77 @@
+mojimask: emoji masks for party videos and photos
+=================================================
+
+Covers every face in a video or photo with an emoji (or blur, pixelate, solid), one at a time.
+Everything happens on your Mac; nothing is uploaded anywhere.
+
+Needs: a Mac with Apple silicon (M1 or newer), macOS 13 or later, ~2 GB free disk space.
+
+
+1. Install
+   Unzip, then drag "Mojimask" into your Applications folder.
+
+
+2. First launch (one time only)
+   This app is free and open source and isn't signed with a paid Apple developer certificate,
+   so macOS asks you to confirm it once:
+
+   - Double-click "Mojimask". macOS says it can't verify the developer. Click Done.
+   - Open System Settings > Privacy & Security, scroll down, and click "Open Anyway"
+     next to the message about Mojimask. Confirm with your password or Touch ID.
+
+   (Or, in Terminal:  xattr -dr com.apple.quarantine "/Applications/Mojimask.app" )
+
+
+3. Use it
+   Choose video or photo…   Pick a clip or a photo (or drop it on the window). The scan takes a few
+                   minutes per minute of video, a few seconds for a photo; the window shows what the
+                   computer sees while it works. A photo is saved back as a photo (JPEG).
+
+   After the scan  Every face we found is already covered. Pick a look, then "Looks good: export",
+                   or "Refine the covers" to check the boxes we weren't sure about. The steps along the
+                   top (Decisions, People, Edit, Export) can be opened in any order, any time.
+
+   Decisions       The boxes we weren't sure about, one question each ("Is the green box a face?",
+                   "Is the green box the same person as the grey one?", ...). Click an answer or press
+                   1 / 2 / 3. "To answer" lists what's left, "Answered" what you've said (change it there).
+                   Anything you leave unanswered stays covered.
+
+   People          Everyone we counted as a person, each with one emoji. Masked / Unmasked leaves
+                   someone visible (yourself, friends who agreed); add a name, or click their emoji to
+                   change it. Changes save as you go.
+
+   Edit            The editor: the whole video with its covers.
+                     Scrub         drag along the timeline at the bottom; arrow keys move one frame
+                                   (Shift: ten), Space plays
+                     Select        click an emoji; E changes it; U masks / shows that person
+                     Cover with    emoji, blur, pixelate or solid, and the emoji set, on the right;
+                                   "Match scene lighting" gives emoji the scene's light
+                     Add a face    drag a box around a missed face; [ and ] start / end a box there,
+                                   S splits a box where it changes, Del: face / not a face,
+                                   K undoes your correction at this frame
+                   "Keyboard shortcuts" (or ?) on the right lists every key. Cmd+Z undoes.
+
+   Export          Switch to Export at the top. Pick the cover style and a format:
+                     Original          same shape and size as your clip
+                     Vertical 9:16     Reels, TikTok, YouTube Shorts, Stories
+                     Portrait 4:5      Instagram / Facebook feed
+                     Square 1:1        square posts
+                     Landscape 16:9    YouTube, X, Facebook, LinkedIn
+                   "Crop to fill" or "Whole frame, blurred sides"; optional start/end times.
+                   The preview shows exactly what will be saved. Export… asks where to save it
+                   (default: next to the original). Switch back to Edit any time.
+                   "Higher-risk footage" (a protest, say) covers whole heads with solid shapes and
+                   asks you to answer every open question in Decisions before exporting.
+
+   The exported .mp4 (H.264 + AAC) has no hidden location, date or device details.
+   Still check the sound (voices, names) and things like tattoos, signs and name badges.
+
+   Next clip       Click "Projects" at the top left. Earlier projects stay listed there.
+
+
+4. Storage
+   Projects live in ~/Library/Application Support/Mojimask/Projects. The start screen lists
+   each project's size: "work" (your answers, edits and the scan, small), "cache" (preview frames
+   and analysis, rebuilt when you open the project again) and, for a video dropped onto the window,
+   "video" (the app's own copy of it). Clear cache or Delete (to the Trash) there.
+   Your original videos and photos are never moved or changed.

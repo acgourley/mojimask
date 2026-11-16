@@ -1,0 +1,546 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title data-i18n="nav.decisions"></title>
+<!-- The app's Decisions step: the questions the scan left to you, one selected at a time (the list on the left, the
+     selected one on the right with its pictures playing). Every decision is one record, whoever made it: a rule, or
+     you; answering saves {answer, by: "user"} into the same record. Developer mode (the app's ?dev=1, or this page
+     opened on its own) adds the rules' answers, filters by kind and the evidence numbers. -->
+<link rel="stylesheet" href="/theme.css">
+<script src="/brand.js"></script>
+<style>
+  :root { --piece: #3DDC84; --person: #B8B4C8; }
+  html, body { height: 100%; }
+  main { height: 100%; display: flex; flex-direction: column; gap: 18px; padding: 24px 32px 28px; }
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .filters .div { width: 1px; height: 22px; background: var(--line); margin: 0 4px; }
+  #piecebar { padding: 10px 14px; border: 1px solid var(--accent); border-radius: 12px; font-size: 13px; }
+  .cols { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(260px, 380px) minmax(0, 1fr); gap: 20px; }
+  .queue { overflow: auto; display: flex; flex-direction: column; gap: 6px; padding: 1px 4px 1px 1px; }
+  .qrow { flex: none; display: flex; align-items: center; gap: 12px; padding: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+          cursor: pointer; text-align: left; white-space: normal; color: inherit; }
+  .qrow:hover { border-color: var(--line2); }
+  .qrow.cur { background: var(--raised); border-color: var(--accent); }
+  .qrow canvas { width: 52px; height: 52px; border-radius: 8px; flex: none; background: #000; }
+  .qrow .t { flex: 1; min-width: 0; display: grid; gap: 3px; }
+  .qrow .t b { font-size: 14px; font-weight: 600; color: var(--text); }
+  .qrow .t span { font-size: 12px; color: var(--dim); font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .badge { flex: none; font: 600 12px/1.3 var(--body); padding: 3px 9px; border-radius: 8px; background: var(--chip); color: var(--dim); }
+  .badge.user { background: var(--accent-tint); color: var(--accent); }
+  .qhint { flex: none; font-size: 12px; color: var(--faint); padding: 8px 2px; }
+  .detail { overflow: auto; border-radius: 18px; padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+  /* the pictures: as big as leaves the question and its answers on screen without scrolling */
+  .pics { display: flex; gap: 16px; --side: clamp(200px, calc(100vh - 545px), 460px); }
+  .pic { flex: 0 1 var(--side); min-width: 0; display: grid; gap: 8px; }
+  .pic canvas { width: 100%; aspect-ratio: 1; border-radius: 12px; background: #000; display: block; }
+  .pic canvas.go { cursor: zoom-in; } .pic canvas.go:hover { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .q { font: 800 26px/1.15 var(--display); margin: 0 0 8px; }
+  .qnote { font-size: 14px; color: var(--dim); margin: 0; max-width: 760px; }
+  .othernote { font-size: 13px; padding: 8px 12px; border-radius: 10px; background: color-mix(in srgb, var(--warn) 16%, transparent); }
+  .answers { display: flex; gap: 12px; flex-wrap: wrap; }
+  .answers button { flex: 1 1 0; min-width: 170px; justify-content: center; gap: 10px; padding: 14px 16px; border-radius: 12px; background: var(--raised);
+                    border: 1px solid var(--raised2); color: var(--text); font-size: 15px; font-weight: 600; white-space: normal; }
+  .answers button:hover { border-color: var(--accent); }
+  .answers button.chosen { background: var(--accent-tint); border-color: var(--accent); color: var(--accent); }
+  .answers button.chosen kbd { border-color: #FFD23F80; color: var(--accent); }
+  .answers button.rulechosen { border: 1px dashed var(--warn); color: var(--warn); }  /* a rule's pick (developer mode) */
+  .answers button.rulechosen kbd { border-color: color-mix(in srgb, var(--warn) 50%, transparent); color: var(--warn); }
+  .answers .by { font-size: 12px; font-weight: 400; opacity: .85; }
+  .rulepick { width: fit-content; font-size: 13px; padding: 5px 11px; border-radius: 9px; border: 1px dashed var(--dim); color: var(--dim); }
+  .why { display: grid; gap: 10px; } .why > div { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .chip.rule { border: 1px dashed var(--line2); background: none; } .chip.grade { border: 1px dashed var(--line2); background: none; }
+  .cands { display: grid; grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); gap: 8px; }
+  .cand { display: grid; gap: 4px; padding: 6px; text-align: left; border-radius: 12px; white-space: normal; background: var(--raised); border-color: var(--raised2); align-items: start; }
+  .cand canvas { width: 100%; aspect-ratio: 1; border-radius: 8px; background: #000; display: block; }
+  .cand .nm { font-weight: 600; font-size: 13px; color: var(--text); } .cand .wy { color: var(--dim); font-size: 11px; line-height: 1.3; font-weight: 400; }
+  .cand.chosen { background: var(--accent-tint); border-color: var(--accent); }
+  .emptybox { margin: auto; text-align: center; display: grid; gap: 14px; justify-items: center; color: var(--dim); }
+  .emptybox h2 { color: var(--text); }
+  @media (max-width: 760px) { main { height: auto; } .cols { grid-template-columns: 1fr; } .queue { max-height: 240px; } }
+</style>
+</head>
+<body>
+<main>
+  <p id="outside" class="small hidden" style="margin:0"><a href="/">← <span data-brand="name"></span></a>
+    <span class="dim" data-i18n="decisions.outside"></span></p>
+  <div class="pagehead">
+    <div>
+      <h1><span data-i18n="nav.decisions"></span><span class="summary" id="count"></span></h1>
+      <p data-i18n="decisions.intro"></p>
+    </div>
+    <button class="primary next" id="nextbtn"><span data-i18n="decisions.next"></span> <i data-ic="arrow-right"></i></button>
+  </div>
+  <div class="filters" id="filters"></div>
+  <div id="piecebar" class="hidden"></div>
+  <div class="cols">
+    <div class="queue" id="list" role="listbox" data-i18n-aria-label="decisions.list_label"></div>
+    <div class="detail card" id="detail"></div>
+  </div>
+</main>
+<script src="strings.js"></script>
+<script src="/icons.js"></script>
+<script src="page_util.js"></script>
+<script>
+i18n();  // the page's own text (strings.js)
+const $ = (id) => document.getElementById(id);
+// every answer has a slot by what it means, the same for every kind of question: 1 keep it (a face, the same person,
+// part of their face), 2 not a face, 3 someone else (different people). Keys 1-3 and the answer bar use the slots.
+
+// each kind of decision: its question, answers (value, label) and evidence chips. The face questions say what to do
+// with a box that's on a face only some of the time: "not a face" uncovers it for all of it, so it's Yes.
+const FACE_NOTE = t("decisions.note.face");
+const KINDS = {
+  // a box you made (a mask you drew, a part you split off): whose face it is -- every person offered, most alike first
+  whose: { name: "Whose face", q: t("decisions.q.whose"), opts: [],
+           chips: (ev) => [ev.split ? "split off by you" : "your mask", `${ev.candidates} people offered`, `frames ${ev.first}–${ev.last}`] },
+  same: { name: "Same person", q: t("decisions.q.same"),
+          note: t("decisions.note.same"),
+          opts: [["same person", t("decisions.a.same_person")], ["different people", t("decisions.a.different_people")]],
+          chips: (ev) => [`score ${ev.score.toFixed(2)}`, ...(ev.fragment ? ["short stretch"] : []), ...(ev.manual ? ["your mask"] : []),
+                        ev.gap_frames < 0 ? `on their head ${1 - ev.gap_frames} frames` : `gap ${ev.gap_frames} frames`, `frames ${ev.first}–${ev.last}`] },
+  overlap: { name: "Overlaps", q: t("decisions.q.overlap"),
+             note: t("decisions.note.overlap"),
+             opts: [["same face", t("decisions.a.same_face")], ["not a face", t("decisions.a.not_face_at_all")], ["someone else", t("decisions.a.someone_else")]],
+             chips: (ev) => [`${ev.numbered ? "numbered" : "grey"} box`, `${ev.frames} frames`, `overlaps in ${Math.round(100 * ev.frames_overlapping)}% of them`,
+                             `median ${Math.round(100 * ev.median_overlap)}% of its box`,
+                             ...(ev.depth_gap !== undefined ? [`depth gap ${ev.depth_gap.toFixed(2)}`] : []),
+                             `frames ${ev.first}–${ev.last}`] },
+  track: { name: "Tracks", q: t("decisions.q.face"), note: FACE_NOTE,
+           opts: [["a face", t("decisions.a.face")], ["not a face", t("decisions.a.not_face")]],
+           chips: (ev) => [`${ev.frames} frames`, `a clear face in ${ev.clear_face_frames}`, `median detector ${ev.median_detector.toFixed(2)}`,
+                           `best face check ${ev.best_face_check.toFixed(2)}`, `${ev.size}px`, `frames ${ev.first}–${ev.last}`] },
+  blip: { name: "Blips", q: t("decisions.q.face"), note: FACE_NOTE,
+          opts: [["a face", t("decisions.a.face")], ["not a face", t("decisions.a.not_face")]],
+          chips: (ev) => [`seen in ${ev.frames} frame${ev.frames > 1 ? "s" : ""}`, `detector ${ev.detector_score.toFixed(2)}`, `face check ${ev.face_check.toFixed(2)}`, ev.skeleton_head ? "skeleton head on it" : "no skeleton head",
+                          `${ev.size}px`, ev.first === ev.last ? `frame ${ev.first}` : `frames ${ev.first}–${ev.last}`] },
+};
+// developer mode (the app's ?dev=1, or this page opened on its own): every decision, the rules' too, with evidence
+const DEV = new URLSearchParams(location.search).has("dev") || window.top === window;
+const FILTERS = [["open", t("decisions.filter.open")], ["user", t("decisions.filter.answered")], ...(DEV ? [["rule", "Rules"], ["all", "All"]] : [])];
+// the "whose" answer that isn't one of the offered boxes (facts.A_SOMEONE_NEW; the KINDS options above and SHORTA below
+// are display pairs, keyed by facts.py's answer strings)
+const SOMEONE_NEW = "someone new";
+// the list's short words for a question, and why it's asked, in plain words
+const SHORTQ = { track: t("decisions.short.face"), blip: t("decisions.short.face"), overlap: t("decisions.short.overlap"), same: t("decisions.short.same"), whose: t("decisions.q.whose") };
+const whyText = (d, fps) => { const ev = d.evidence || {};
+  return d.kind === "same" ? (ev.fragment ? t("decisions.why.fragment") : t("decisions.why.same"))
+    : d.kind === "blip" ? t("decisions.why.blip", { n: ev.frames })
+    : d.kind === "track" ? t("decisions.why.track", { s: (ev.frames / (fps || 30)).toFixed(1) })
+    : d.kind === "whose" ? t("decisions.why.whose") : t("decisions.why.overlap"); };
+const SHORTA = { "a face": t("decisions.sa.yes"), "not a face": t("decisions.sa.no"), "same person": t("decisions.sa.yes"), "different people": t("decisions.sa.no"), "same face": t("decisions.sa.yes"),
+                 "someone else": t("decisions.sa.someone_else"), "someone new": t("decisions.sa.someone_new"),
+                 "covered by the person's box (while they are)": t("decisions.sa.covered_by_box"), "left as it is": t("decisions.sa.too_short"), "dropped: too weak": t("decisions.sa.dropped"),
+                 "kept: covered": t("decisions.sa.kept"), "covered by another box": t("decisions.sa.inside"), "joined already": t("decisions.sa.joined"), "kept apart": t("decisions.sa.kept_apart"),
+                 waiting: t("decisions.sa.waiting") };
+// piece: only the decisions about one box (#piece=78, from the editor's R): the questions whose answer changes that
+// box (it's the green box). Questions where it's only the grey box answer about another box -- jazz: R on box 8 showed
+// "is the green box part of the grey box's face?" about box 412, and "not a face" hid 412, not 8 -- so they're behind
+// a link (nearby) and say which box they change.
+let D = [], filter = "open", kind = "all", cur = 0, piece = null, nearby = false, FPS = 30;
+const by = (d) => d.by === "user" ? "user" : d.by ? "rule" : "open";
+const own = (d) => String(d.about.piece) === piece;
+const next = (d) => !own(d) && String(d.about.person) === piece;  // piece is only the grey box here
+const about = (d) => piece === null || own(d) || (nearby && next(d));
+const MAX = 80;  // rows drawn
+const shownList = () => D.filter((d) => about(d) && (filter === "all" || by(d) === filter) && (kind === "all" || d.kind === kind))
+  .sort((a, b) => (piece === null ? 0 : own(b) - own(a)));  // its own questions first
+function readHash() {
+  const m = location.hash.match(/piece=([^&]+)/);
+  piece = m ? decodeURIComponent(m[1]) : null;
+  if (piece !== null) { filter = "all"; kind = "all"; cur = 0; nearby = false; }
+}
+window.addEventListener("hashchange", () => { readHash(); draw(); });
+window.reloadDecisions = () => load(true);  // the app, on coming back here: answers may have changed elsewhere (an undo in Edit)
+
+// initial: opening the step (or coming back to it). With nothing open it shows what was decided instead of an empty
+// list. After an answer it doesn't: answering the last open question moves on to People (finished below), rather
+// than the list turning into every rule answer at once (2026-11-13: "a bunch more decisions appeared").
+async function load(initial = true, scene = true) {  // scene: false when the caller has fed Scene already
+  const r = await (await fetch("api/decisions")).json();
+  // open questions first, the ones that matter most first: long tracks (on screen longest), overlaps, then blips
+  // faces first (is it a face at all?), the ones whose answer settles the most who's-who questions first; then who's who
+  const rank = { whose: 0, track: 1, overlap: 1, blip: 1, same: 2 };
+  D = (r.decisions || []).map((d, i) => [d, i]).sort(([a, i], [b, j]) => (!!a.by - !!b.by) || (a.by ? i - j
+    : (rank[a.kind] ?? 3) - (rank[b.kind] ?? 3) || (b.weight || 0) - (a.weight || 0)
+      || (b.evidence?.frames || 0) - (a.evidence?.frames || 0))).map(([d]) => d);
+  if (initial && !D.some((d) => !d.by)) filter = DEV ? "all" : "user";
+  readHash();  // nothing open: show what was decided rather than an empty list
+  MISSING = !!r.missing;
+  if (scene) Scene.load();
+  draw();
+}
+let MISSING = false;
+function counts(all) {
+  const c = { open: 0, user: 0, rule: 0, all: 0 };
+  for (const d of D) if (all || ((kind === "all" || d.kind === kind) && about(d))) { c[by(d)]++; c.all++; }
+  return c;
+}
+function draw() {
+  const c = counts(), tot = counts(true);
+  $("count").textContent = t("decisions.count", { open: tot.open, answered: tot.user }) + (DEV ? ` · ${tot.rule} by rules` : "");
+  if (window.parent !== window) window.parent.postMessage({ pa: "counts", open: tot.open }, location.origin);  // the app's tab shows it
+  const pill = (label, n, on, click) => { const b = document.createElement("button"); b.className = "pill" + (on ? " on" : ""); b.textContent = `${label} ${n}`; b.onclick = click; b.setAttribute("aria-pressed", on); return b; };
+  const span = (cls, text = "") => Object.assign(document.createElement("span"), { className: cls, textContent: text });
+  const fpill = ([k, label]) => pill(label, c[k], k === filter, () => { filter = k; cur = 0; draw(); });
+  $("filters").replaceChildren(...FILTERS.slice(0, 2).map(fpill), ...(!DEV ? [] : [span("div"), span("devtag", "DEV"), ...FILTERS.slice(2).map(fpill),
+    ...[["all", "Every kind", D.length], ...Object.entries(KINDS).map(([k, K]) => [k, K.name, D.filter((d) => d.kind === k).length])].map(([k, label, n]) =>
+      pill(label, n, k === kind, () => { kind = k; cur = 0; draw(); }))]));
+  const L = shownList();
+  $("piecebar").classList.toggle("hidden", piece === null);
+  if (piece !== null) {
+    const mine = D.filter(own).length, others = D.filter(next).length;
+    $("piecebar").innerHTML = `${mine ? t("decisions.piece.mine_html", { n: mine }) : t("decisions.piece.none")}
+      ${others ? `<a href="#" id="nearbylink">${t(nearby ? "decisions.piece.hide_nearby" : "decisions.piece.show_nearby", { n: others })}</a> ·` : ""}
+      <a href="#" id="alllink">${t("decisions.piece.all")}</a>
+      <div class="dim" style="margin-top:4px">${t("decisions.piece.split_hint")}</div>`;
+    $("alllink").onclick = (e) => { e.preventDefault(); history.replaceState(null, "", location.pathname + location.search); piece = null; draw(); };
+    if ($("nearbylink")) $("nearbylink").onclick = (e) => { e.preventDefault(); nearby = !nearby; cur = 0; draw(); };
+  }
+  cur = Math.max(0, Math.min(cur, Math.min(L.length, MAX) - 1));
+  const hint = Object.assign(document.createElement("div"), { className: "qhint",
+    textContent: (L.length > MAX ? t("decisions.more_not_listed", { n: L.length - MAX }) + " · " : "") + (L.length ? t("decisions.keys_hint") : "") });
+  $("list").replaceChildren(...L.slice(0, MAX).map(qrow), hint);
+  mark();
+}
+// a question in the list: its box, what's asked, why (and its answer once it has one)
+function qrow(d, i) {
+  const el = document.createElement("button"); el.className = "qrow"; el.setAttribute("role", "option");
+  const s = stills(d).find((x) => x.piece) || stills(d)[0];
+  const cv = document.createElement("canvas"); cv.dataset.n = 52; if (s) paint(cv, s);
+  const who = by(d), ans = who === "open" ? "" : d.kind === "whose" && d.answer !== SOMEONE_NEW ? t("decisions.chosen") : SHORTA[d.answer] || d.answer;
+  el.append(cv);
+  el.insertAdjacentHTML("beforeend", `<span class="t"><b>${SHORTQ[d.kind] || SHORTQ.overlap}</b><span></span></span>` +
+    (ans ? `<span class="badge ${who}"></span>` : ""));
+  if (ans) el.querySelector(".badge").textContent = ans + (who === "rule" ? " · " + t("decisions.rule") : "");  // (an answer can be any text: not HTML)
+  el.querySelector(".t span").textContent = whyText(d, FPS) + (DEV ? ` · ${(KINDS[d.kind] || KINDS.overlap).name.toLowerCase()}` : "");
+  el.onclick = () => { cur = i; mark(); };
+  return el;
+}
+// the moments a record shows, one per box: for each set of boxes (the green one, the grey one, or both together) its
+// clearest moment -- the records list a box's best frame first (same.py: the grey box's best, then where it ends) or in
+// the middle (blips.py: first, best, last)
+function stills(d) {
+  const groups = new Map();
+  for (const s of d.show || []) {
+    const k = (s.piece ? "g" : "") + (s.person ? "p" : "");
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(s);
+  }
+  return [...groups.entries()].map(([k, ss]) => d.kind === "same" ? (k === "p" ? ss[0] : ss[ss.length - 1]) : ss[Math.floor((ss.length - 1) / 2)]);
+}
+// The selected question, large: its pictures (they play, see Loops), the question, the answers and why it's asked.
+// One picture per box: a question about one box, or two boxes at the same moment (an overlap), has one, and beside it
+// the same moment in the whole frame; "same person" has two, one per box.
+function detail(d, i) {
+  const el = $("detail");
+  el.replaceChildren();
+  if (!d) {
+    const open = D.some((x) => !x.by);
+    el.innerHTML = `<div class="emptybox">${MISSING ? `<h2>${t("decisions.empty.missing_title")}</h2><p>${t("decisions.empty.missing")}${DEV ? " (Developer: or run python -m mojimask.scan.cover on it.)" : ""}</p>`
+      : filter === "open" && !open ? `<h2>${t("decisions.empty.done_title")}</h2><p>${t("decisions.empty.done")}</p><button class="primary next" id="emptynext">${t("decisions.next")} ${Icon("arrow-right")}</button>`
+      : `<h2>${t("decisions.empty.none_title")}</h2><p>${t("decisions.empty.none")}</p>`}</div>`;
+    if ($("emptynext")) $("emptynext").onclick = $("nextbtn").onclick;
+    return;
+  }
+  const K = KINDS[d.kind] || KINDS.overlap, ev = d.evidence || {};
+  const pics = document.createElement("div"); pics.className = "pics";
+  const ss = stills(d), wide = ss.length === 1;
+  const picture = (s, label, opts = {}) => {
+    const box = document.createElement("div"); box.className = "pic";
+    const cv = document.createElement("canvas"); cv.dataset.n = 460;
+    const cap = Object.assign(document.createElement("div"), { className: "eyebrow num" });
+    cv._loop = { s, ids: [s.piece ? String(d.about.piece) : null, s.person ? String(d.about.person) : null], ...opts,
+                 cap: (ft, span) => { cap.textContent = label + (opts.wide ? "" : " · " + (ft == null ? t("decisions.pic.frame", { t: s.t }) : span ? t("decisions.pic.frame_of", { t: ft, a: span[0], b: span[1] }) : t("decisions.pic.frame", { t: ft }))); } };
+    cv._loop.cap(null); paint(cv, s);
+    cv.onmousemove = (e) => Loops.scrub(cv, e.offsetX / cv.clientWidth); cv.onmouseleave = () => Loops.leave(cv);
+    // to look closer: that moment in Edit (the one it's showing, if it's playing), with the box this picture is about
+    // selected (the green one, else the grey)
+    const pc = String(s.piece ? d.about.piece : d.about.person);
+    if (window.parent !== window) {
+      cv.title = t("decisions.pic.open_tip"); cv.classList.add("go");
+      cv.onclick = () => window.parent.postMessage({ pa: "editAt", t: cv._loop.now ?? s.t, piece: pc }, location.origin);
+    }
+    box.append(cv, cap); pics.append(box);
+  };
+  for (const s of ss) picture(s, ss.length > 1 ? (s.piece ? t("decisions.pic.green") : t("decisions.pic.grey")) : s.piece && s.person ? t("decisions.pic.boxes") : t("decisions.pic.box"));
+  if (wide) picture(ss[0], t("decisions.pic.in_frame"), { wide: true, skip: [String(d.about.piece), String(d.about.person)] });
+  el.append(pics);
+  if (piece !== null && next(d)) {  // a question about another box, shown because box `piece` is its grey box
+    el.append(Object.assign(document.createElement("div"), { className: "othernote",
+      innerHTML: t("decisions.other_note_html") }));
+  }
+  const whose = d.kind === "whose";
+  const head = document.createElement("div");
+  head.innerHTML = `<h2 class="q"></h2><p class="qnote"></p>`;
+  head.querySelector(".q").textContent = (d.rank ? `${d.rank}. ` : "") + (whose ? d.question : K.q);
+  head.querySelector(".qnote").textContent = whose ? t("decisions.note.whose") : K.note || "";
+  el.append(head);
+  // the answers: one row of buttons, keys 1 2 3 left to right (whose face: the people below are 1-9, Someone new is 0)
+  const opts = whose ? [[SOMEONE_NEW, t("decisions.a.someone_new")]] : K.opts, ruled = d.by && d.by !== "user";
+  const row = document.createElement("div"); row.className = "answers";
+  row.append(...opts.map(([v, label], k) => {
+    const b = document.createElement("button"), cls = d.by === "user" && d.answer === v ? "chosen" : ruled && d.answer === v ? "rulechosen" : "";
+    b.className = cls; b.setAttribute("aria-pressed", cls === "chosen");
+    b.innerHTML = `${cls === "chosen" ? Icon("check") : ""}<span>${label}${cls === "rulechosen" ? ` <span class="by">· ${t("decisions.rule")}</span>` : ""}</span><kbd>${whose ? "0" : k + 1}</kbd>`;
+    if (cls === "rulechosen") b.title = t("decisions.rule_tip", { rule: d.by });
+    b.onclick = () => answer(d, d.by === "user" && d.answer === v ? null : v);
+    return b;
+  }));
+  el.append(row);
+  if (whose) {  // every person offered, as a picture to click
+    const grid = document.createElement("div"); grid.className = "cands";
+    d.candidates.forEach((c, k) => {
+      const b = document.createElement("button"); b.className = "cand" + (d.by === "user" && d.answer === c.piece ? " chosen" : "");
+      const cv = document.createElement("canvas"); cv.dataset.n = 200;
+      b.append(cv); paint(cv, { t: c.t, person: c.box, piece: null });
+      b.insertAdjacentHTML("beforeend", `<span class="nm"></span><span class="wy"></span>`);
+      b.querySelector(".nm").textContent = c.name || t("decisions.unnamed"); b.querySelector(".wy").textContent = c.why;
+      if (k < 9) b.querySelector(".nm").insertAdjacentHTML("beforeend", ` <kbd>${k + 1}</kbd>`);
+      b.onclick = () => answer(d, d.by === "user" && d.answer === c.piece ? null : c.piece);
+      grid.append(b);
+    });
+    el.append(grid);
+  }
+  if (ruled && !opts.some(([v]) => v === d.answer)) {  // a rule's answer that isn't one of yours: said under the answers
+    const rp = Object.assign(document.createElement("div"), { className: "rulepick", textContent: `${SHORTA[d.answer] || d.answer} · ${t("decisions.rule")}`, title: t("decisions.rule_tip_pick", { rule: d.by }) });
+    el.append(rp);
+  }
+  // why it's asked, in plain words; the numbers behind it in developer mode
+  const why = document.createElement("div"); why.className = "why";
+  why.innerHTML = `<div><span class="eyebrow">${t("decisions.why_we_ask")}</span><span class="chip"></span></div>`;
+  why.querySelector(".chip").textContent = whyText(d, FPS);
+  if (d.via === "agent") why.firstElementChild.append(Object.assign(document.createElement("span"),
+    { className: "chip", textContent: t("decisions.agent"), title: t("decisions.agent_tip") }));
+  if (DEV) {
+    const row2 = document.createElement("div"); row2.innerHTML = `<span class="devtag">DEV</span>`;
+    const chip = (text, cls = "", title = "") => { const c = Object.assign(document.createElement("span"), { className: "chip " + cls, textContent: text }); if (title) c.title = title; row2.append(c); };
+    if (ruled) chip(`${d.answer} · ${d.by}`, "rule", d.by);
+    for (const t of K.chips(ev)) chip(t);
+    if (d.graded) chip(`grades: ${d.graded}`, "grade", "What your position grades (out/probe) say; for checking");
+    why.append(row2);
+  }
+  el.append(why);
+}
+// the crop around a picture's boxes: centre and half-width (the half-width stays fixed while it loops, so it doesn't pump)
+function crop(bs) {
+  const x0 = Math.min(...bs.map((b) => b[0])), y0 = Math.min(...bs.map((b) => b[1])), x1 = Math.max(...bs.map((b) => b[2])), y1 = Math.max(...bs.map((b) => b[3]));
+  return [(x0 + x1) / 2, (y0 + y1) / 2, Math.max(Math.max(x1 - x0, y1 - y0) * 1.4, 70)];
+}
+async function paint(cv, s) {
+  const im = await frame(s.t);
+  if (!im) return;
+  if (cv._loop && cv._loop.wide) drawWide(cv, im, s, cv._loop.skip);
+  else draw1(cv, im, s, ...crop([s.piece, s.person].filter(Boolean)));
+}
+const VAR = (name) => getComputedStyle(document.documentElement).getPropertyValue(name);
+function strokeBoxes(g, s, n, at) {  // the grey box under the green one; a thin white edge outside so both show on any picture
+  const lw = n < 100 ? 1.5 : n < 300 ? 2 : 3;
+  for (const [b, col] of [[s.person, "--person"], [s.piece, "--piece"]]) {
+    if (!b) continue;
+    const r = at(b);
+    g.strokeStyle = VAR(col); g.lineWidth = lw; g.strokeRect(...r);
+    if (n >= 100) { g.strokeStyle = "#fff"; g.lineWidth = 1; g.strokeRect(r[0] - lw + 1, r[1] - lw + 1, r[2] + 2 * lw - 2, r[3] + 2 * lw - 2); }
+  }
+}
+function progressLine(g, n, progress) {  // where in its loop it is: a thin line along the bottom
+  if (progress === null) return;
+  g.fillStyle = "rgba(0,0,0,.5)"; g.fillRect(0, n - 3, n, 3);
+  g.fillStyle = VAR("--accent"); g.fillRect(0, n - 3, n * progress, 3);
+}
+function draw1(cv, im, s, cx, cy, half, progress = null) {
+  const n = +cv.dataset.n, g = hidpi(cv, n), k = n / (2 * half);
+  // start clean every frame: where the crop runs past the picture's edge nothing is drawn, so the last frame's boxes
+  // would stay there
+  g.fillStyle = "#000"; g.fillRect(0, 0, n, n);
+  g.drawImage(im, cx - half, cy - half, 2 * half, 2 * half, 0, 0, n, n);
+  strokeBoxes(g, s, n, (b) => [(b[0] - cx + half) * k, (b[1] - cy + half) * k, (b[2] - b[0]) * k, (b[3] - b[1]) * k]);
+  progressLine(g, n, progress);
+}
+// "In the frame": the same moment, as much of the frame as a square holds (slid to keep the box in it), with
+// everyone else's covers on. The emoji are the Mac's own, drawn flat: a quick preview, not lit as the export is.
+function drawWide(cv, im, s, skip = [], progress = null) {
+  const n = +cv.dataset.n, g = hidpi(cv, n), iw = im.naturalWidth, ih = im.naturalHeight, half = Math.min(iw, ih) / 2, k = n / (2 * half);
+  const [bx, by] = crop([s.piece, s.person].filter(Boolean));
+  const cx = Math.min(Math.max(bx, half), iw - half), cy = Math.min(Math.max(by, half), ih - half);
+  g.fillStyle = "#000"; g.fillRect(0, 0, n, n);
+  g.drawImage(im, cx - half, cy - half, 2 * half, 2 * half, 0, 0, n, n);
+  g.textAlign = "center"; g.textBaseline = "middle"; g.fillStyle = "#fff";
+  for (const [tid, x, y, size, , pc, shown] of Scene.covers(s.t)) {
+    if (shown || skip.includes(String(pc))) continue;  // (the boxes asked about stay bare, so you can see them)
+    const px = size * Scene.scale * k;
+    g.font = `${px}px "Apple Color Emoji", "Segoe UI Emoji", sans-serif`;
+    g.fillText(Scene.emoji(tid), (x - cx + half) * k, (y - cy + half) * k + px * 0.06);
+  }
+  strokeBoxes(g, s, 200, (b) => [(b[0] - cx + half) * k, (b[1] - cy + half) * k, (b[2] - b[0]) * k, (b[3] - b[1]) * k]);
+  progressLine(g, n, progress);
+}
+// Scene: everyone's covers on each frame and the emoji each person wears (the editor's choice: review.html emojiFor),
+// for "In the frame". Loaded once the page is up; after an answer (covers change with answers) fed from the answer's
+// reply, which carries the new resolved covers and edits.
+const Scene = (() => {
+  let S = null;
+  return {
+    get scale() { return (S && S.scale) || 1.25; },
+    covers: (t) => (S && S.resolved && S.resolved[t]) || [],
+    emoji: (tid) => emojiFor(tid, S.edits || {}),
+    async load() {
+      await loadPresets();
+      const s = await fetch("api/init").then((r) => r.json()).catch(() => null);
+      if (!s) return;
+      const first = !S; S = s; FPS = s.fps || FPS;
+      if (first) for (const cv of document.querySelectorAll(".pics canvas")) if (cv._loop.wide && cv._loop.now === undefined) paint(cv, cv._loop.s);
+    },
+    // an answer's reply ({resolved, edits}): true if it could be used (Scene loaded already and the reply has both)
+    adopt(r) {
+      if (!S || !r || !r.resolved || !r.edits) return false;
+      S = { ...S, resolved: r.resolved, edits: r.edits };
+      return true;
+    },
+  };
+})();
+
+// Loops: the pictures of the selected question (the one 1/2/3 answer) play their box, and the pointer over any picture scrubs
+// it (left to right through the box's frames): motion tells a face from a hand, a shirt front or the back of a head, which a still often can't.
+// Each picture plays its box's own frames, first detection to last (/api/boxes), in real time and straight round again,
+// following its boxes with the crop at the still's size; nothing is played past the box's ends (held there, a box slides
+// off the person as the camera pans). Two pictures loop each at its own length. A box on screen longer than LOOP_MAX_S
+// plays faster to fit. A box seen in one frame, a photo, and Reduce Motion stay still.
+const LOOP_MAX_S = 6;  // the longest pass
+const Loops = (() => {
+  let info = null, raf = 0;
+  const boxes = new Map(), active = new Set(), scrubbing = new Set();
+  const still = matchMedia("(prefers-reduced-motion: reduce)");
+  const ready = fetch("api/formats").then((r) => r.json()).then((f) => { info = f; }).catch(() => {});
+  function boxesOf(id) {
+    if (!id) return Promise.resolve(null);
+    if (!boxes.has(id)) boxes.set(id, fetch(`api/boxes?ids=${encodeURIComponent(id)}`).then((r) => r.json())
+      .then((j) => j[id] ? new Map(Object.entries(j[id]).map(([t, b]) => [+t, b])) : null).catch(() => null));
+    return boxes.get(id);
+  }
+  const at = (m, t) => {  // the box at frame t, or where it was nearest in time (held)
+    if (!m) return null;
+    if (m.has(t)) return m.get(t);
+    let best = null, d = 1e9;
+    for (const u of m.keys()) if (Math.abs(u - t) < d) { d = Math.abs(u - t); best = u; }
+    return m.get(best);
+  };
+  async function plan(cv) {  // the frames this picture plays and its boxes on each
+    const L = cv._loop;
+    if (L.frames !== undefined) return L.frames;
+    await ready;
+    L.frames = null;
+    if (!info || info.photo || !info.frames || info.frames < 2) return null;
+    const [pm, qm] = await Promise.all(L.ids.map(boxesOf));
+    const life = pm || qm;
+    if (!life) return null;  // a box this page can't follow (one you drew): stays still
+    const ts = [...life.keys()], a = Math.min(...ts), z = Math.max(...ts);  // its own frames, nothing either side
+    const step = Math.max(1, Math.ceil((z - a + 1) / (LOOP_MAX_S * info.fps)));
+    const fr = [];
+    for (let t = a; t <= z; t += step) fr.push({ t, piece: L.s.piece ? at(pm, t) : null, person: L.s.person ? at(qm, t) : null });
+    if (fr.length < 2) return null;
+    const [, , half] = crop([L.s.piece, L.s.person].filter(Boolean));
+    L.half = half; L.frames = fr; L.span = [a, z];
+    fr.forEach((f) => frame(f.t));  // start loading every frame of it
+    return fr;
+  }
+  function show(cv, i) {  // draw frame i of the picture's frames
+    const L = cv._loop, f = L.frames[i];
+    L.shown = i;
+    frame(f.t).then((im) => {
+      if (!im || L.shown !== i || !(active.has(cv) || scrubbing.has(cv))) return;  // (moved on meanwhile)
+      const [cx, cy] = crop([f.piece, f.person].filter(Boolean));
+      const s = { ...L.s, t: f.t, piece: f.piece, person: f.person }, p = i / (L.frames.length - 1);
+      if (L.wide) drawWide(cv, im, s, L.skip, p); else draw1(cv, im, s, cx, cy, L.half, p);
+      L.cap?.(f.t, L.span);
+      L.now = f.t;
+    });
+  }
+  function tick(now) {
+    raf = 0;
+    for (const cv of active) {
+      const L = cv._loop;
+      if (!L.frames || !cv.isConnected || scrubbing.has(cv)) continue;  // the pointer has it
+      if (L.t0 === undefined) L.t0 = now;
+      const per = 1 / info.fps, e = ((now - L.t0) / 1000) % (L.frames.length * per);  // straight round again, no pause
+      const i = Math.max(0, Math.min(L.frames.length - 1, Math.floor(e / per)));  // (a start set in this same frame can be a hair after `now`)
+      if (i !== L.shown) show(cv, i);
+    }
+    if (active.size) raf = requestAnimationFrame(tick);
+  }
+  async function start(cv) {
+    if (still.matches || !(await plan(cv)) || active.has(cv)) return;
+    active.add(cv); delete cv._loop.t0; cv._loop.shown = -1;
+    if (!raf) raf = requestAnimationFrame(tick);
+  }
+  function stop(cv) {
+    active.delete(cv);
+    if (!scrubbing.has(cv) && cv.isConnected) { delete cv._loop.now; paint(cv, cv._loop.s); cv._loop.cap?.(null); }  // back to its still
+  }
+  return {
+    select(cardEl) {  // the selected card's pictures play; the others go back to their stills
+      const want = new Set(cardEl ? cardEl.querySelectorAll(".pics canvas") : []);
+      for (const cv of [...active]) if (!want.has(cv)) stop(cv);
+      for (const cv of want) if (!active.has(cv)) start(cv);
+    },
+    // the pointer over a picture scrubs it: across the picture is through the box's frames, left to right
+    async scrub(cv, x) {
+      if (!(await plan(cv))) return;
+      scrubbing.add(cv);
+      const L = cv._loop, i = Math.max(0, Math.min(L.frames.length - 1, Math.floor(x * L.frames.length)));
+      if (i !== L.shown) show(cv, i);
+    },
+    leave(cv) {  // the selected card's picture plays on from there; another goes back to its still
+      if (!scrubbing.delete(cv)) return;
+      const L = cv._loop;
+      if (active.has(cv)) L.t0 = performance.now() - Math.max(0, L.shown) * 1000 / info.fps;
+      else if (cv.isConnected) { delete L.now; L.shown = -1; paint(cv, L.s); L.cap?.(null); }
+    },
+  };
+})();
+async function answer(d, v) {
+  const wasOpen = D.some((x) => !x.by);
+  const r = await fetch("api/decisions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: d.id, answer: v }) });
+  if (!r.ok) { alert(t("common.err.save", { error: await r.text() })); return; }
+  const { resolved, edits, ...rec } = await r.json();  // the decision as answered, and the covers it leaves
+  Object.assign(d, rec);
+  const fed = Scene.adopt({ resolved, edits });
+  if (d.kind === "same" || d.kind === "whose") await load(false, !fed);  // the next pairs open at once
+  else if (!fed) Scene.load();
+  draw();  // (the list keeps its place: an answered question leaves "To answer", and the next one is selected)
+  if (wasOpen && piece === null && filter === "open" && !D.some((x) => !x.by)) finished();
+}
+// The last open question just got its answer: on to People (in the app), as the Next button does.
+function finished() {
+  if (window.parent !== window) setTimeout(() => window.parent.postMessage({ pa: "go", to: "people" }, location.origin), 900);
+}
+// the selected question: its row marked, itself drawn large, its pictures playing
+function mark(scroll) {
+  const rows = [...document.querySelectorAll(".qrow")], L = shownList().slice(0, MAX);
+  rows.forEach((c, i) => { c.classList.toggle("cur", i === cur); c.setAttribute("aria-selected", i === cur); });
+  detail(L[cur], cur);
+  Loops.select($("detail"));
+  if (scroll && rows[cur]) rows[cur].scrollIntoView({ block: "nearest" });
+}
+document.addEventListener("keydown", (e) => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const L = shownList().slice(0, MAX);
+  if (e.key === "j" || e.key === "ArrowDown") { cur = Math.min(L.length - 1, cur + 1); mark(true); e.preventDefault(); }
+  else if (e.key === "k" || e.key === "ArrowUp") { cur = Math.max(0, cur - 1); mark(true); e.preventDefault(); }
+  else if (L[cur] && L[cur].kind === "whose" && /^[0-9]$/.test(e.key)) {
+    const d = L[cur], c = e.key === "0" ? SOMEONE_NEW : (d.candidates[+e.key - 1] || {}).piece;
+    if (c) answer(d, c);
+  }
+  else if (["1", "2", "3"].includes(e.key) && L[cur]) {  // left to right, as the answers show
+    const o = (KINDS[L[cur].kind] || KINDS.overlap).opts[+e.key - 1];
+    if (o) answer(L[cur], o[0]);
+  }
+});
+if (window.top === window) document.getElementById("outside").classList.remove("hidden");  // opened on its own: a way back
+$("nextbtn").onclick = () => { if (window.parent !== window) window.parent.postMessage({ pa: "go", to: "people" }, location.origin); else location.href = "/"; };
+drawIcons();
+load();
+</script>
+</body>
+</html>

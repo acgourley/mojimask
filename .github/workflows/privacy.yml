@@ -1,0 +1,11 @@
+name: privacy
+# No pictures, videos or scan output in the repo (AGENTS.md, Privacy). The same check runs as a pre-commit hook.
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  no-media:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 .githooks/check_media.py --all
