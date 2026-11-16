@@ -1,7 +1,7 @@
 #!/bin/bash
-# Build "Mojimask.app" (Apple Silicon, macOS 13+) and a disk image and a zip to send.
+# Build "Mojimask.app" (Apple Silicon, macOS 13+) and a disk image to send.
 #
-#   ./packaging/build_mac.sh          -> dist/Mojimask.app, dist/Mojimask.dmg, dist/mojimask-mac.zip
+#   ./packaging/build_mac.sh          -> dist/Mojimask.app, dist/Mojimask.dmg
 #
 # Uses the project's .venv (Python 3.11 + numpy, opencv, onnxruntime, pyobjc, pywebview, PyInstaller).
 # Video is decoded and encoded by macOS itself (AVFoundation); no ffmpeg is bundled or needed.
@@ -96,12 +96,9 @@ echo "signature ok (ad-hoc)"
 # The built app loads every engine module, page and model it needs, or the build fails here.
 "$APP/Contents/MacOS/$NAME" --check
 
-cp "packaging/Read me first.txt" "dist/Read me first.txt"
-rm -f dist/mojimask-mac.zip
-(cd dist && ditto -c -k --sequesterRsrc --keepParent "$NAME.app" "mojimask-mac.zip" && zip -q "mojimask-mac.zip" "Read me first.txt")
 # the disk image: drag to Applications, with the first-launch steps drawn in its window (make_dmg.sh)
 ./packaging/make_dmg.sh "$APP"
-du -sh "$APP" dist/mojimask-mac.zip
+du -sh "$APP" "dist/$NAME.dmg"
 
 # With an Apple Developer ID (removes the Gatekeeper step for recipients). Untested. Sign inside-out, not with
 # --deep: every nested library first, then the bundle with the entitlements.

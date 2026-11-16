@@ -12,7 +12,7 @@ the project is: [README](README.md). The rules for contributions: [CONTRIBUTING.
 | `web/` | the pages, their scripts and styles, fonts and pictures: everything the app's window shows |
 | `tools/` | developer tools: the benchmarks (`bench/`, with their history in `bench/data/`), the census labeller (`label/`) and jazz's census (`truth/jazz.json`) |
 | `experiments/` | finished research, with its own `requirements.txt`; nothing in the app imports it |
-| `packaging/` | the Mac build, its icon, licences and the read-me that ships with the app |
+| `packaging/` | the Mac build and its disk image, icon and licences |
 | `models/` | model weights (not in git; `models/README.md` says where each comes from) |
 | `test_clips/` | `jazz.mp4`, the public-domain sample clip; put your own clips here (git-ignored) |
 | `out/` | everything the app and tools write from a checkout (git-ignored) |
@@ -73,7 +73,7 @@ MOJIMASK_DEPTH=anything-small .venv/bin/python app_server.py --port 8801 --dev  
 ## Building the Mac app
 
 ```bash
-./packaging/build_mac.sh        # ~1 min -> dist/Mojimask.app, dist/mojimask-mac.zip
+./packaging/build_mac.sh        # ~1 min -> dist/Mojimask.app, dist/Mojimask.dmg
 ```
 
 - Needs the setup above and the models in `desktop.CHECK_MODELS` plus the depth model; it stops at once if one is
