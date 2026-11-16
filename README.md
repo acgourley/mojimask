@@ -1,19 +1,38 @@
-# mojimask
+<p align="center">
+  <img src="docs/img/readme-banner.webp" width="440" alt="mojimask">
+</p>
 
-Cover every face in a party video or photo with an emoji (or blur, pixelate, a solid box, or one photo), for the
-footage where ordinary face blurring fails: a handheld phone, a moving crowd, strobing coloured light,
-motion blur, costumes. It finds and follows the faces, asks you about the moments it isn't sure of,
-and exports a clean video shaped for social media.
+<p align="center">
+  Face masking for dance parties, protests and other complex videos.<br>
+  Offline, free and open source.
+</p>
 
-Everything happens on your computer. No video, frame or face is uploaded anywhere.
+<p align="center">
+  <a href="https://github.com/acgourley/mojimask/releases/latest/download/Mojimask.dmg"><b>Download for macOS</b></a>
+  &nbsp;·&nbsp; <a href="docs/media/jazz-walkthrough.mp4">Watch the 45 second demo</a>
+  &nbsp;·&nbsp; <a href="https://acgourley.github.io/mojimask/">Website</a>
+  <br><sub>Requires Apple Silicon. Nothing leaves your Mac.</sub>
+</p>
 
-Free and open source (AGPL-3.0). Status: v0.1, Mac only (Apple silicon, macOS 13 or later).
+<p align="center">
+  <img src="docs/img/disguise-masquerave.webp" width="520" alt="A tarantella dance scene, every face covered by a smiling emoji">
+</p>
 
-## Using it
+## What it does
 
-Unzip `mojimask-mac.zip` and follow `Read me first.txt` inside it. In short: choose a video, wait for the scan,
-check the result, export. The app is signed ad hoc, so macOS asks you to confirm it once in System Settings; the
-read-me shows how.
+Crowds, strobe lights, fast motion can confuse other tools. Mojimask uses research grade machine learning to find,
+follow and understand each person in the scene.
+
+- **Finding:** YOLOv5-Face and RetinaFace detect and double-check faces. YOLO11x-pose finds heads even when faces
+  are hidden, and tilts the masks.
+- **Following:** optical flow follows each person from frame to frame, and SFace and OSNet-AIN recognise them when
+  they reappear.
+- **Depth:** Depth Anything V2 keeps faces at different distances apart and layers covers behind whatever is in
+  front of them.
+- **Human judgement:** for the perfectionist, the app will still ask you to weigh in on the tricky cases. Automatic
+  judgements can be modified; set custom masks or unmask the consenting.
+- **Masks:** emoji presets, blur, pixelate, or even upload a sticker, with options to match scene lighting and body
+  pose.
 
 ## Building it
 
@@ -26,7 +45,7 @@ uv pip install --python .venv/bin/python -r requirements.txt
 ./packaging/build_opencv.sh      # a small OpenCV, ~5 min
 # put the model files in models/: see models/README.md
 .venv/bin/python desktop.py      # run it from source
-./packaging/build_mac.sh         # or build it: dist/Mojimask.app and dist/mojimask-mac.zip
+./packaging/build_mac.sh         # or build it: dist/Mojimask.app and dist/Mojimask.dmg
 ```
 
 ## Contributing
