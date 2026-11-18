@@ -21,7 +21,7 @@ real footage. The one exception is the sample clip, `test_clips/jazz.mp4`, a pub
 for screenshots and bug reports. If a bug only shows up on your own footage, describe it in numbers and words
 (frame numbers, box sizes, "the second guest from the left") instead.
 
-The pre-commit hook and CI refuse pictures, videos and scan output (`.githooks/check_media.py`).
+The pre-commit hook and CI refuse pictures, videos and scan output (`.githooks/check_media.sh`).
 
 ## Pull requests
 

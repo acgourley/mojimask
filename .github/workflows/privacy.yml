@@ -8,4 +8,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: python3 .githooks/check_media.py --all
+      - run: .githooks/check_media.sh --all

@@ -181,7 +181,7 @@ and logic are in Rust; QML only binds to `store.state` and calls `store.call(...
 
 - People's faces never leave the machine: no cloud vision, no sending frames or crops anywhere (including to
   yourself through an API), never commit clips, frames or face images. `out/`, videos and pictures are git-ignored,
-  and `.githooks/check_media.py` refuses them; don't force-add them or skip the hook.
+  and `.githooks/check_media.sh` refuses them; don't force-add them or skip the hook.
 - `test_clips/jazz.mp4` is a public-domain silent film: its frames and crops may be looked at directly, and should
   be, before trusting a measurement. Every other clip or photo shows real people: numbers only, until it is listed
   here as public domain. In docs, comments and commit messages, never describe how anyone in them looks: say
