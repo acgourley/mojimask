@@ -71,6 +71,9 @@ pub struct Perf {
     pub composite_ms: VecDeque<f64>,
     pub decode_ms: VecDeque<f64>,
     pub latency_ms: VecDeque<f64>,
+    /// the grain thread (decoder.rs): the frame to BGR, then frame_grain
+    pub grain_convert_ms: VecDeque<f64>,
+    pub grain_ms: VecDeque<f64>,
     pub composites: u64,
     pub new_frames: u64,
     pub zero_copy: u64,
@@ -78,7 +81,7 @@ pub struct Perf {
     pub gpu: String,
 }
 
-fn push(q: &mut VecDeque<f64>, v: f64) {
+pub fn push(q: &mut VecDeque<f64>, v: f64) {
     if q.len() >= 240 {
         q.pop_front();
     }
@@ -99,7 +102,8 @@ impl Perf {
     pub fn summary(&self) -> Value {
         json!({
             "composite_ms": stats(&self.composite_ms), "decode_ms": stats(&self.decode_ms),
-            "request_to_composited_ms": stats(&self.latency_ms), "composites": self.composites,
+            "request_to_composited_ms": stats(&self.latency_ms),
+            "grain_convert_ms": stats(&self.grain_convert_ms), "grain_ms": stats(&self.grain_ms), "composites": self.composites,
             "new_frames": self.new_frames, "zero_copy_frames": self.zero_copy, "uploaded_frames": self.uploads,
             "gpu": self.gpu,
         })

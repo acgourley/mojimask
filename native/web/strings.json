@@ -204,6 +204,7 @@
   "edit.redo": "Redo",
   "edit.back_frame": "Back one frame",
   "edit.forward_frame": "Forward one frame",
+  "edit.slow_play": "Playing {fps} of {full} frames a second",
   "edit.legend.detected": "detected",
   "edit.legend.held": "held",
   "edit.legend.manual": "manual",

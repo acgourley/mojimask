@@ -76,6 +76,9 @@ pub struct Editor {
     /// the frame in the video item's texture (-1: none yet)
     pub shown: i64,
     pub playing: bool,
+    /// while playing, the frames drawn per second over the last second (0: paused, or not measured yet); the
+    /// transport says so when it is under the clip's rate
+    pub play_fps: f64,
     /// the selected cover (-1: none)
     pub selected: i64,
     /// the covers of the shown frame, circles in video pixels
@@ -103,6 +106,7 @@ impl Default for Editor {
             t: 0,
             shown: -1,
             playing: false,
+            play_fps: 0.0,
             selected: -1,
             covers: vec![],
             covers_fit: false,

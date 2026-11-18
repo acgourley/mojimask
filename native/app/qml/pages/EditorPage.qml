@@ -220,6 +220,9 @@ Rectangle {
                         smooth: true
                         opacity: 0.55
                         cache: false
+                        // a new frame's map arrives over HTTP: keep the last one until it has (cleared first, the
+                        // map was missing ~16% of the time while playing a 4K clip: it flickered)
+                        retainWhileLoading: true
                     }
 
                     // the project editor's boxes (video px * k), small first
@@ -450,6 +453,15 @@ Rectangle {
                     text: page.proj ? (page.vw.frame_info || "") : (page.ed.shown < 0 ? "–" : page.ed.shown) + " / " + Math.max(0, page.vid.frames - 1)
                     font.family: Theme.body; font.pixelSize: 13; font.weight: Font.DemiBold; font.features: { "tnum": 1 }
                     color: Theme.text
+                }
+                // playback that can't keep up skips frames: say so rather than stutter silently
+                Text {
+                    objectName: "slow-play"
+                    readonly property real full: page.vid.fps || 0
+                    visible: page.ed.playing === true && page.ed.play_fps > 0 && page.ed.play_fps < 0.9 * full
+                    text: T.t("edit.slow_play", { fps: Math.round(page.ed.play_fps), full: Math.round(full) })
+                    font.family: Theme.body; font.pixelSize: 13; font.features: { "tnum": 1 }
+                    color: Theme.dim
                 }
                 Text {
                     objectName: "frame-note"

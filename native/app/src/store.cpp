@@ -29,6 +29,7 @@ void Store::log(int level, const QString &source, const QString &msg) { Devtools
 Store::Store(const QJsonObject &config, QObject *parent) : QObject(parent) {
     g_store = this;
     QByteArray cfg = QJsonDocument(config).toJson(QJsonDocument::Compact);
+    m_state = new QQmlPropertyMap(this);
     m_app = mmApi().create(cfg.constData(), notifyCb, logCb, this);
     refresh();
 }
@@ -43,26 +44,45 @@ Store *Store::instance() { return g_store; }
 
 void Store::onNotify(const QStringList &paths) {
     if (paths.contains(QStringLiteral("@render"))) emit renderRequested();
-    bool data = false;
     for (const auto &p : paths)
-        if (p != QStringLiteral("@render")) data = true;
-    if (!data || m_pending) return;
+        if (p != QStringLiteral("@render")) m_keys.insert(p.section(QLatin1Char('.'), 0, 0));
+    if (m_keys.isEmpty() || m_pending) return;
     m_pending = true;
     // coalesce a burst of notes into one re-read
     QTimer::singleShot(0, this, [this] {
         m_pending = false;
-        refresh();
+        QSet<QString> keys;
+        keys.swap(m_keys);
+        refresh(keys.contains(QString()) ? QSet<QString>() : keys);
     });
 }
 
-void Store::refresh() {
-    g_dirty = false;
-    char *s = mmApi().state(m_app, "");
-    QJsonDocument d = QJsonDocument::fromJson(s);
-    mmApi().string_free(s);
-    m_state = d.object().toVariantMap();
-    m_version++;
-    emit stateChanged();
+void Store::refresh(const QSet<QString> &keys) {
+    QJsonObject fresh;
+    if (keys.isEmpty()) {
+        g_dirty = false;
+        m_keys.clear();
+        char *s = mmApi().state(m_app, "");
+        fresh = QJsonDocument::fromJson(s).object();
+        mmApi().string_free(s);
+    } else {
+        for (const auto &k : keys) {
+            char *s = mmApi().state(m_app, k.toUtf8().constData());
+            fresh.insert(k, QJsonDocument::fromJson(QByteArray("[") + s + "]").array().at(0));
+            mmApi().string_free(s);
+        }
+    }
+    bool any = false;
+    for (auto it = fresh.constBegin(); it != fresh.constEnd(); ++it) {
+        if (m_json.contains(it.key()) && m_json.value(it.key()) == it.value()) continue;
+        m_json.insert(it.key(), it.value());
+        m_state->insert(it.key(), it.value().toVariant());
+        any = true;
+    }
+    if (any) {
+        m_version++;
+        emit stateChanged();
+    }
 }
 
 QJsonValue Store::stateJson(const QString &path) const {

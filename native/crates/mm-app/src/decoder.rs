@@ -23,8 +23,13 @@ pub struct Decoded {
 
 /// Lighting's grain (records::frame_grain) for the frames shown, measured on its own thread: at 4K it takes longer
 /// than a frame lasts, and on the decoder's thread it held playback to about 10 fps. While playing, a frame is drawn
-/// with the newest grain measured (a frame or a few earlier: grain changes slowly); each frame's own grain, once
-/// measured, is kept and the shown frame redrawn with it, so a paused frame is drawn exactly as the export draws it.
+/// with the newest grain measured (grain changes slowly), and grain is measured at most every [`PLAYING_GAP`]: at 4K
+/// one measure is ~105 ms of a core (debug build: 80 ms to BGR, 25 ms to measure), so measuring every frame kept a
+/// core busy for nothing. Each frame's own grain, once measured, is kept and the shown frame redrawn with it, so a
+/// paused frame is drawn exactly as the export draws it.
+/// While playing, the least time between two grain measures.
+const PLAYING_GAP: std::time::Duration = std::time::Duration::from_millis(400);
+
 #[derive(Default)]
 pub struct Grain {
     st: std::sync::Mutex<GrainState>,
@@ -67,8 +72,15 @@ pub fn start_grain(sh: &Arc<Shared>) {
                     s = sh.grain.wake.wait(s).unwrap();
                 }
             };
+            let t0 = Instant::now();
             let Ok(img) = mm_media::convert::frame_bgr(&f, &probe, tags.as_deref(), mm_media::convert::Colour::Display) else { continue };
+            let t1 = Instant::now();
             let g = crate::records::frame_grain(img.w as usize, img.h as usize, &img.data);
+            {
+                let mut p = sh.perf.lock().unwrap();
+                crate::render::push(&mut p.grain_convert_ms, (t1 - t0).as_secs_f64() * 1e3);
+                crate::render::push(&mut p.grain_ms, t1.elapsed().as_secs_f64() * 1e3);
+            }
             {
                 let mut s = sh.grain.st.lock().unwrap();
                 if s.gen != gen {
@@ -81,6 +93,12 @@ pub fn start_grain(sh: &Arc<Shared>) {
             if gen == sh.gen() && sh.st.lock().unwrap().editor.shown == t as i64 {
                 sh.dirty.store(true, std::sync::atomic::Ordering::SeqCst);
                 sh.changed(&["@render"]);
+            }
+            // playing: the frames between are drawn with the newest grain; on a pause the frame last shown (the one
+            // waiting) is measured at once
+            let until = Instant::now() + PLAYING_GAP;
+            while Instant::now() < until && sh.st.lock().unwrap().editor.playing {
+                std::thread::sleep(std::time::Duration::from_millis(20));
             }
         })
         .unwrap();

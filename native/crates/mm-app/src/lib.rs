@@ -169,13 +169,34 @@ impl App {
     }
 
     /// The state tree, or the subtree at a dotted path.
+    /// Only the top-level section a path names is serialized (QML re-reads the sections a change note names, up to
+    /// 30 times a second while playing: the whole tree is ~270 KB on a party clip, the editor ~15 KB).
     pub fn state(&self, path: &str) -> Value {
-        let v = serde_json::to_value(&*self.sh.st.lock().unwrap()).unwrap();
-        if path.is_empty() {
+        let (top, rest) = path.split_once('.').unwrap_or((path, ""));
+        let v = {
+            let st = self.sh.st.lock().unwrap();
+            let j = |x: Result<Value, serde_json::Error>| x.unwrap();
+            match top {
+                "" => j(serde_json::to_value(&*st)),
+                "app" => j(serde_json::to_value(&st.app)),
+                "editor" => j(serde_json::to_value(&st.editor)),
+                "export" => j(serde_json::to_value(&st.export)),
+                "readback" => j(serde_json::to_value(&st.readback)),
+                "library" => j(serde_json::to_value(&st.library)),
+                "scan" => j(serde_json::to_value(&st.scan)),
+                "project" => j(serde_json::to_value(&st.project)),
+                "decisions" => j(serde_json::to_value(&st.decisions)),
+                "people" => j(serde_json::to_value(&st.people)),
+                "export_page" => st.export_page.clone(),
+                "result" => st.result.clone(),
+                _ => return Value::Null,
+            }
+        };
+        if rest.is_empty() {
             return v;
         }
         let mut cur = &v;
-        for k in path.split('.') {
+        for k in rest.split('.') {
             cur = match cur {
                 Value::Object(m) => match m.get(k) {
                     Some(x) => x,

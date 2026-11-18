@@ -239,9 +239,25 @@ pub struct Decoder {
     /// the source pts of the last frame `pull` returned since the last seek
     last_src: Option<u64>,
     colour_tags: Option<String>,
+    /// the slots the video's keyframes show in (from the movie's stss), sorted; None = unknown or every frame
+    keys: Option<Vec<usize>>,
 }
 
 
+
+/// How we seek: flushing and accurate, so qtdemux moves each track to its own keyframe before the target.
+///
+/// Not KEY_UNIT | SNAP_BEFORE (until 2026-11-18): a key-unit seek moves the target back to the earliest keyframe
+/// over *every* track, and iPhone movies carry timed-metadata tracks (`mebx`) whose single sample starts at 0, so
+/// every seek went back to the start and decoded forward from there: on a 4K iPhone clip (1491 frames, a keyframe
+/// every 30) a seek took 1.5 s at slot 700 and 2.7 s at slot 1300 (`mm-media-parity seek-bench`: median 2280 ms;
+/// the same clip remuxed to video only: 62 ms), and playback, which seeks when it falls 12 frames behind, sank
+/// to 0.5 fps. An accurate seek decodes from the video's own keyframe before the target; `pull` already drops the
+/// frames before the target by their labels, so the frames handed out are the same. Evidence (2026-11-18): the
+/// iPhone clip's seek-bench median 2280 -> 59 ms; `seek-all` 0 wrong slots on it (1491) and on jazz, jazz_rot90,
+/// jazz_vfr and jazz_hlg10 (8 runs each); jazz_4k's seek-bench unchanged (63 -> 61 ms); `frame-at` (300 random
+/// frame_at calls, forward or seek) 0 wrong slots on all five.
+const SEEK: gst::SeekFlags = gst::SeekFlags::FLUSH.union(gst::SeekFlags::ACCURATE);
 
 /// MM_MEDIA_DEBUG=1: say when the decoder's output needed mending (stale pictures, late frames, stale EOS).
 fn debug(a: std::fmt::Arguments) {
@@ -400,7 +416,7 @@ impl Decoder {
             });
         }
         pipeline.set_state(gst::State::Playing)?;
-        let mut d = Decoder { pipeline, sink, probe: Probe::default(), pending: None, cur: None, t: 0, eos: false, inflight, gen: 0, held: Vec::new(), last_seek: None, last_src: None, colour_tags: None };
+        let mut d = Decoder { pipeline, sink, probe: Probe::default(), pending: None, cur: None, t: 0, eos: false, inflight, gen: 0, held: Vec::new(), last_seek: None, last_src: None, colour_tags: None, keys: None };
         let first_sample = loop {
             let s = d.pull_sample()?.ok_or_else(|| anyhow!("no frames"))?;
             if s.buffer().and_then(|b| label(b)).map_or(true, |(_, g)| g == 0) {
@@ -442,6 +458,13 @@ impl Decoder {
             source: "gst".into(),
         };
         // the timeline as AVFoundation reads it, when the file's boxes can be read (MP4 / QuickTime)
+        if let Ok(mv) = crate::mp4::read_movie(&path) {
+            if let Some(kt) = mv.video().and_then(|v| v.key_times()) {
+                let tl = d.probe.timeline();
+                // key_times are from the start of presentation; the timeline's slots count from video_start
+                d.keys = Some(kt.iter().map(|&k| tl.first_slot(tl.video_start + k)).collect());
+            }
+        }
         if let Ok(m) = probe_movie(&path) {
             let p = &mut d.probe;
             (p.width, p.height, p.fps, p.framerate) = (m.width, m.height, m.fps, m.framerate);
@@ -566,8 +589,7 @@ impl Decoder {
                             .unwrap_or(gst::ClockTime::from_nseconds(p));
                         debug(format_args!("the decoder ended without frame {p} (and {} more): decoding again from {to}",
                             self.inflight.lock().unwrap().outstanding.len() - 1));
-                        let flags = gst::SeekFlags::FLUSH | gst::SeekFlags::KEY_UNIT | gst::SeekFlags::SNAP_BEFORE;
-                        self.pipeline.seek_simple(flags, to)?;
+                        self.pipeline.seek_simple(SEEK, to)?;
                         self.gen = self.inflight.lock().unwrap().gen;
                         self.held.clear();
                         self.eos = false;
@@ -608,11 +630,11 @@ impl Decoder {
         }
     }
 
-    /// Go to slot t: a flushing seek to the keyframe at or before slot t's frame; `next` then decodes forward and
-    /// skips the frames before slot t itself, by their source pts.
+    /// Go to slot t: a flushing seek to slot t's time ([`SEEK`]); qtdemux sends from the video's keyframe before it,
+    /// `next` then decodes forward and skips the frames before slot t itself, by their source pts.
     ///
-    /// A key-unit seek: qtdemux starts its new segment at the target, sends from the keyframe before it, and we drop
-    /// the frames wholly before the target as gst_segment_clip would (an ACCURATE seek decodes the same frames).
+    /// qtdemux starts its new segment at the target, and we drop the frames wholly before the target as
+    /// gst_segment_clip would.
     ///
     /// **Frames are identified by labels, not by the decoder's pts** (fixed 2026-11-17). Before, a frame reached by
     /// a seek was sometimes not the one decoding forward gives (`mm-media-parity seek-all`: jazz and jazz_rot90 0-3
@@ -653,7 +675,7 @@ impl Decoder {
     /// the EOS mend used 5 times (jazz and jazz_hlg10 last frames, a jazz_vfr one). 4K seek (jazz_4k, seek + next):
     /// median 56-60 ms, p95 77-85 ms.
     pub fn seek(&mut self, t: usize) -> Result<()> {
-        self.seek_flags(t, gst::SeekFlags::FLUSH | gst::SeekFlags::KEY_UNIT | gst::SeekFlags::SNAP_BEFORE)
+        self.seek_flags(t, SEEK)
     }
 
     pub fn seek_flags(&mut self, t: usize, flags: gst::SeekFlags) -> Result<()> {
@@ -685,9 +707,12 @@ impl Decoder {
         self.t
     }
 
-    /// Slot t's frame: decodes forward when t is a little ahead of the position, else seeks.
+    /// Slot t's frame: decodes forward when t is ahead of the position and no keyframe lies between (a seek would
+    /// decode from that keyframe on, no fewer frames than going on from here), or when t is a few slots ahead and
+    /// the keyframes aren't known; else seeks. Playback that falls behind so goes on decoding instead of seeking
+    /// over and over.
     pub fn frame_at(&mut self, t: usize) -> Result<Option<Frame>> {
-        if !(self.t <= t && t <= self.t + 12) {
+        if !self.forward_to(t) {
             self.seek(t)?;
         }
         while let Some((s, f)) = self.next()? {
@@ -696,6 +721,23 @@ impl Decoder {
             }
         }
         Ok(None)
+    }
+
+    /// The slots the keyframes show in, if the movie lists them.
+    pub fn keyframes(&self) -> Option<&[usize]> {
+        self.keys.as_deref()
+    }
+
+    /// Whether going forward from the position to slot t is no more decoding than seeking there.
+    pub fn forward_to(&self, t: usize) -> bool {
+        if t < self.t {
+            return false;
+        }
+        if t <= self.t + 12 {
+            return true;
+        }
+        // a keyframe in (position, t] means a seek decodes fewer frames
+        self.keys.as_ref().is_some_and(|k| !k.iter().any(|&s| s > self.t && s <= t))
     }
 
     /// The next slot's (t, frame); the same frame repeats when the video holds one.

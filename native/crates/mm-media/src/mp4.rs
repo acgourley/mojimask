@@ -146,6 +146,8 @@ pub struct Track {
     /// (count, offset) composition offsets
     pub ctts: Vec<(u32, i32)>,
     pub sizes: Vec<u32>,
+    /// stss: the sync samples (keyframes), 1-based; None = every sample is one
+    pub sync: Option<Vec<u32>>,
     /// each sample's byte offset in the file
     pub offsets: Vec<u64>,
     pub stsd: Vec<u8>,
@@ -196,6 +198,16 @@ impl Track {
         }
         v.truncate(self.n());
         v
+    }
+    /// Presentation times (seconds from the start of presentation: after the edit list's media start, before any
+    /// leading empty edit) of the keyframes; None when every sample is one.
+    pub fn key_times(&self) -> Option<Vec<f64>> {
+        let sync = self.sync.as_ref()?;
+        let pts = self.pts();
+        let (s0, ts) = (self.edit_media_start(), self.media_ts.max(1) as f64);
+        let mut v: Vec<f64> = sync.iter().filter_map(|&i| pts.get(i.checked_sub(1)? as usize)).map(|&p| (p - s0) as f64 / ts).collect();
+        v.sort_by(f64::total_cmp);
+        Some(v)
     }
     /// Movie-time start of the media (the leading empty edits) and the presentation duration (movie ticks).
     pub fn time_range(&self, movie_ts: u32) -> (u64, u64) {
@@ -337,6 +349,10 @@ fn parse_track(t: &Bx) -> Result<Track> {
         for i in 0..be32(d) as usize {
             tr.ctts.push((be32(&d[4 + 8 * i..]), be32(&d[8 + 8 * i..]) as i32));
         }
+    }
+    if let Some(b) = stbl.get(b"stss") {
+        let d = &b.data[4..];
+        tr.sync = Some((0..be32(d) as usize).map(|i| be32(&d[4 + 4 * i..])).collect());
     }
     if let Some(b) = stbl.get(b"stsz") {
         let d = &b.data[4..];

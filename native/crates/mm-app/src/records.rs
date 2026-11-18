@@ -259,14 +259,21 @@ pub fn frame_grain(w: usize, h: usize, bgr: &[u8]) -> f64 {
     use mm_vision::gauss::gaussian_blur_f32;
     use mm_vision::resize::{resize_u8, Interp};
     let (th, tw) = ((h / 8).max(16), (w / 8).max(16));
-    let img = Mat::from_vec(h, w, 3, bgr.to_vec());
+    // the tiles are cut straight from the frame (Mat::roi's pixels, without copying the whole frame first: 25 MB at 4K)
+    let roi = |x: usize, y: usize, gw: usize, gh: usize| {
+        let mut out = Vec::with_capacity(gw * gh * 3);
+        for r in y..y + gh {
+            out.extend_from_slice(&bgr[(r * w + x) * 3..(r * w + x + gw) * 3]);
+        }
+        Mat::from_vec(gh, gw, 3, out)
+    };
     let mut ds: Vec<f32> = Vec::new();
     for i in 0..4 {
         for j in 0..4 {
             let y = ((2 * i + 1) * h / 8).saturating_sub(th / 2);
             let x = ((2 * j + 1) * w / 8).saturating_sub(tw / 2);
             let (gw, gh) = (tw.min(w - x), th.min(h - y));
-            let mut g = img.roi(x, y, gw, gh);
+            let mut g = roi(x, y, gw, gh);
             if h > 1000 {
                 g = resize_u8(&g, 0, 0, 0.5, 0.5, Interp::Linear);
             }
@@ -298,4 +305,50 @@ pub fn pictures(photos: HashMap<String, String>, default_photo: String) -> mm_re
 
 pub fn eyes(s: &Setup) -> Result<Eyes> {
     Ok(Eyes::from_json(&s.eyes_json)?)
+}
+
+#[cfg(test)]
+mod grain_tests {
+    use super::*;
+
+    /// frame_grain cuts its tiles straight from the frame: the same value as cutting them with Mat::roi from a copy
+    #[test]
+    fn grain_tiles_as_roi() {
+        use mm_vision::gauss::gaussian_blur_f32;
+        use mm_vision::resize::{resize_u8, Interp};
+        let old = |w: usize, h: usize, bgr: &[u8]| {
+            let (th, tw) = ((h / 8).max(16), (w / 8).max(16));
+            let img = Mat::from_vec(h, w, 3, bgr.to_vec());
+            let mut ds: Vec<f32> = Vec::new();
+            for i in 0..4 {
+                for j in 0..4 {
+                    let y = ((2 * i + 1) * h / 8).saturating_sub(th / 2);
+                    let x = ((2 * j + 1) * w / 8).saturating_sub(tw / 2);
+                    let mut g = img.roi(x, y, tw.min(w - x), th.min(h - y));
+                    if h > 1000 {
+                        g = resize_u8(&g, 0, 0, 0.5, 0.5, Interp::Linear);
+                    }
+                    let gf = Mat::from_vec(g.rows, g.cols, 3, g.data.iter().map(|&v| v as f32).collect());
+                    let b = gaussian_blur_f32(&gf, 0, 0, 1.0, 1.0);
+                    for r in 2..gf.rows.saturating_sub(2) {
+                        for c in 2..gf.cols.saturating_sub(2) {
+                            for k in 0..3 {
+                                let i = (r * gf.cols + c) * 3 + k;
+                                ds.push((gf.data[i] - b.data[i]).abs());
+                            }
+                        }
+                    }
+                }
+            }
+            mm_core::np::median(&ds) as f64 * 1.4826
+        };
+        let mut x: u32 = 7;
+        for (w, h) in [(643, 476), (1080, 1920), (100, 60)] {
+            let bgr: Vec<u8> = (0..w * h * 3).map(|i| {
+                x = x.wrapping_mul(1664525).wrapping_add(1013904223);
+                ((i % 251) as u32 + (x >> 28)) as u8
+            }).collect();
+            assert_eq!(frame_grain(w, h, &bgr), old(w, h, &bgr), "{w}x{h}");
+        }
+    }
 }

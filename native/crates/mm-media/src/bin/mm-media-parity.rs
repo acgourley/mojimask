@@ -6,6 +6,8 @@
 //!   mm-media-parity export CLIP OUT PRESET FIT [START END]
 //!   mm-media-parity meta-check CLIP
 //!   mm-media-parity seek-all CLIP                  (every slot by seek vs forward: media_seek.py)
+//!   mm-media-parity frame-at CLIP [N]             (frame_at over a random walk vs forward: forward or seek)
+//!   mm-media-parity keys CLIP                      (the slots the keyframes show in)
 //!   mm-media-parity seek-bench CLIP [N]            (seek + next latency at N spread-out slots)
 //!   mm-media-parity trace CLIP F|sN:K ...          (frames as the decoder hands them out, after seeks; debugging)
 use anyhow::{bail, Result};
@@ -177,6 +179,43 @@ fn main() -> Result<()> {
                     i += 1;
                 }
             }
+        }
+        "frame-at" => {
+            // frame_at over a random walk (jumps forward within and past keyframes, back, short steps) vs decoding
+            // forward: which slots differ (Decoder::frame_at decodes forward or seeks)
+            let mut d = mm_media::Decoder::open(&a[2])?;
+            let n = d.probe.n;
+            let k: usize = a.get(3).map(|s| s.parse().unwrap()).unwrap_or(300);
+            let mut fwd = vec![];
+            while let Some((_, f)) = d.next()? {
+                let y = mm_media::convert::Yuv::from_frame(&f)?;
+                fwd.push((f.pts, md5ish(&y.y.iter().map(|&v| v as u8).collect::<Vec<_>>())));
+            }
+            let (mut x, mut t, mut bad, mut fwds) = (99u64, 0usize, vec![], 0);
+            for _ in 0..k {
+                x = x.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+                let r = (x >> 33) as usize;
+                t = match r % 4 {
+                    0 => t + 1 + r % 3,
+                    1 => t + 13 + r % 40,
+                    2 => t.saturating_sub(1 + r % 30),
+                    _ => r % n,
+                }
+                .min(n - 1);
+                fwds += d.forward_to(t) as usize;
+                let f = d.frame_at(t)?.unwrap();
+                let y = mm_media::convert::Yuv::from_frame(&f)?;
+                let m = md5ish(&y.y.iter().map(|&v| v as u8).collect::<Vec<_>>());
+                if (f.pts - fwd[t].0).abs() > 1e-6 || m != fwd[t].1 {
+                    bad.push(json!({"t": t, "pts": f.pts, "fwd_pts": fwd[t].0}));
+                }
+            }
+            println!("{}", json!({"n": n, "asked": k, "went_forward": fwds, "mismatches": bad}));
+        }
+        "keys" => {
+            // the slots the keyframes show in (Decoder::frame_at decodes forward up to the next one)
+            let d = mm_media::Decoder::open(&a[2])?;
+            println!("{}", json!({"n": d.probe.n, "keys": d.keyframes()}));
         }
         "seek-bench" => {
             // seek latency: seek(t) + next() to slot t's frame, at N spread-out slots (a fixed pseudo-random order)
