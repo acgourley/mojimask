@@ -1,13 +1,7 @@
-# --- Python / tooling
-.venv*/
-__pycache__/
-*.pyc
 .DS_Store
 
-# --- build output (packaging/build_mac.sh regenerates all of it)
-build/
-dist/
-selftest_report.json
+# --- build output (native/.gitignore has cargo's and cmake's; native/packaging/make_app.sh regenerates dist/)
+native/dist/
 
 # --- model weights: too big for git, and not all of them may be redistributed.
 # models/README.md lists each file, where it comes from, its licence and its SHA-256.
@@ -24,15 +18,12 @@ test_clips/*
 *.MP4
 *.heic
 *.HEIC
-# ...except the sample clip the app ships with (packaging/build_mac.sh bundles it)
+# ...except the sample clip the app ships with (native/packaging/make_app.sh bundles it)
 !test_clips/jazz.mp4
 # ...and the website's walkthrough of the app on that clip (GitHub Pages serves docs/)
 !docs/media/jazz-walkthrough.mp4
-web/assets/portrait_test.png
-web/assets/portrait_test.png.pose.json
-web/assets/portrait_default.png
-web/assets/portrait_default.png.pose.json
-web/assets/*.pose.json
+# a portrait's measured pose, cached beside the picture
+*.pose.json
 # every picture, wherever it is saved (a frame or crop written anywhere must not be committed by accident)...
 *.jpg
 *.jpeg
@@ -43,36 +34,15 @@ web/assets/*.pose.json
 *.JPEG
 *.PNG
 # ...except the app's own pictures (old paintings, public domain), listed by path
-!web/assets/gallery/*.jpg
-!web/assets/icon_art.jpg
-!web/assets/portrait_mona.png
+!native/web/assets/gallery/*.jpg
+!native/web/assets/icon_art.jpg
+!native/web/assets/portrait_mona.png
 !docs/media/jazz-walkthrough-poster.jpg
 # ...and the website's pictures: public-domain paintings wearing emoji, and the app shown on them
 !docs/img/*.webp
 !docs/img/social-card.jpg
 !docs/img/favicon.png
 !docs/img/apple-touch-icon.png
-
-# --- finished research scripts, kept on disk but not in the repo: nothing in the app or the current
-# developer tools (AGENTS.md) imports them.
-# (face_signals/ also holds per-face scores computed from the party clips.)
-experiments/face_signals/
-experiments/layers/*
-!experiments/layers/l2_detect.py
-experiments/appearance_links.py
-experiments/appearance_spots.py
-experiments/body_tracks.py
-experiments/body_variants.py
-experiments/dinov2_appearance.py
-experiments/eval_tools.py
-experiments/face_vs_body.py
-experiments/gapfill.py
-experiments/identity_descriptors.py
-experiments/occluders.py
-experiments/persons.py
-experiments/probe.py
-experiments/motion.py
-experiments/proto/render.py
 
 # --- local editor / agent settings (paths on this machine)
 .claude/

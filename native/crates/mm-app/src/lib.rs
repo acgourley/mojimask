@@ -45,14 +45,10 @@ pub struct Config {
     /// restore that state now
     pub restore: bool,
     pub dev: bool,
-    /// start the Python engine (app_server.py) as a sidecar for the Projects, Decisions and People pages
+    /// start the engine (mm_engine::native) for the Projects, Decisions and People pages (off: the Editor alone)
     pub sidecar: bool,
     /// the projects folder it uses (MOJIMASK_PROJECTS); default `<root>/out/native/projects`
     pub projects: String,
-    /// the Python that runs it (the project's venv)
-    pub python: String,
-    /// the native engine's scan motion: "python" (cv2 through the project's Python; the default for now) or "native"
-    pub motion: String,
 }
 
 /// Called with the JSON array of changed paths, from any thread.

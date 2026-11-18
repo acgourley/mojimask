@@ -15,8 +15,7 @@
 //! - **depth** (depth.Depth.near): the cached grey movie and sidecar (dets/depth_<model>.*, made by [`crate::depth`]),
 //!   decoded through mm-media.
 //! - **motion** (flow, face_motion, trackable, looks), by the scan's motion setting: [`NativeMotion`] (mm-motion's head
-//!   following, our own motion, plus follow.patch/ncc ported exactly), [`PyMotion`] (asked of Python live: follow.Clip
-//!   on the same frames, exactly what Python's scan computes) or replayed from a recording of a Python run
+//!   following, our own motion, plus follow.patch/ncc ported exactly) or replayed from a recording
 //!   ([`mm_scan::evidence::replay`]). `looks` takes both patches' frame and box. Camera motion ([`NativeCamera`],
 //!   mats_v2.npy) is mm-motion's camera fit, fed by the detect step's frames.
 //! - Face and motion evidence answer `&self` from several threads (the join's follows run in threads, as join.py's):
@@ -31,9 +30,7 @@ use mm_scan::geom::Cs;
 use mm_scan::np::M23;
 use mm_vision::Mat;
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::{Arc, Mutex};
 
@@ -311,94 +308,6 @@ impl Depth for RealDepth {
     }
 }
 
-// ------------------------------------------------------------------------------------------------ motion from Python
-
-const MOTION_PY: &str = include_str!("python/motion_server.py");
-
-/// Motion asked of Python (follow.Clip on the project's frames and mats_v2.npy) over a pipe, one JSON line a call
-/// (`--motion python`). Exactly what Python's scan computes, for the calls Rust's scan makes.
-pub struct PyMotion {
-    child: Mutex<Child>,
-    pipe: Mutex<(ChildStdin, BufReader<ChildStdout>)>,
-    pub calls: std::sync::atomic::AtomicUsize,
-}
-
-impl PyMotion {
-    pub fn start(python: &str, root: &Path, proj: &Path) -> Result<PyMotion> {
-        let mut child = Command::new(python)
-            .arg("-u")
-            .arg("-c")
-            .arg(MOTION_PY)
-            .arg(std::path::absolute(proj)?) // the child runs in root, not the caller's directory
-            .current_dir(root)
-            .env("PYTHONPATH", root)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
-            .spawn()?;
-        let stdin = child.stdin.take().unwrap();
-        let mut stdout = BufReader::new(child.stdout.take().unwrap());
-        let mut line = String::new();
-        stdout.read_line(&mut line)?;
-        if line.trim() != "ready" {
-            return Err(anyhow!("motion server: {line}"));
-        }
-        Ok(PyMotion { child: Mutex::new(child), pipe: Mutex::new((stdin, stdout)), calls: Default::default() })
-    }
-
-    /// One request, one answer (the pipe is held for both: calls from several threads take turns).
-    fn ask(&self, req: serde_json::Value) -> Py {
-        self.calls.fetch_add(1, Relaxed);
-        let mut p = self.pipe.lock().unwrap();
-        writeln!(p.0, "{req}").expect("motion server");
-        let mut line = String::new();
-        p.1.read_line(&mut line).expect("motion server");
-        Py::parse(line.trim()).unwrap_or_else(|e| panic!("motion server: {e}: {line}"))
-    }
-}
-
-impl PyMotion {
-    /// review_server.flow_step(gray t0, gray t1, c) (a placed cover followed one frame), exactly as Python moves it.
-    pub fn flow_step(&self, t0: i64, t1: i64, c: &Cs) -> Option<[f64; 3]> {
-        let v = self.ask(serde_json::json!({"fn": "flow_step", "a": [t0, t1, c]}));
-        let l = v.as_list()?;
-        Some([l[0].as_f64()?, l[1].as_f64()?, l[2].as_f64()?])
-    }
-}
-
-impl Drop for PyMotion {
-    fn drop(&mut self) {
-        if let Ok(mut p) = self.pipe.lock() {
-            let _ = writeln!(p.0, "{{\"fn\": \"quit\"}}");
-        }
-        if let Ok(mut c) = self.child.lock() {
-            let _ = c.wait();
-        }
-    }
-}
-
-impl Motion for PyMotion {
-    fn flow(&self, t0: i64, t1: i64, c: &Cs) -> Option<FlowM> {
-        let v = self.ask(serde_json::json!({"fn": "flow", "a": [t0, t1, c]}));
-        let l = v.as_list()?;
-        Some(FlowM { dx: l[0].as_f64().unwrap(), dy: l[1].as_f64().unwrap(), n: l[2].as_i64().unwrap(), spread: l[3].as_f64().unwrap() })
-    }
-    fn face_motion(&self, t0: i64, t1: i64, c: &Cs) -> (Option<M23>, String) {
-        let v = self.ask(serde_json::json!({"fn": "motion", "a": [t0, t1, c]}));
-        let v = v.as_list().unwrap();
-        let m = v[0].as_list().map(|l| {
-            let f: Vec<f64> = l.iter().map(|x| x.as_f64().unwrap()).collect();
-            [[f[0], f[1], f[2]], [f[3], f[4], f[5]]]
-        });
-        (m, v[1].as_str().unwrap().to_string())
-    }
-    fn trackable(&self, a: i64, b: i64) -> f64 {
-        self.ask(serde_json::json!({"fn": "trackable", "a": [a, b]})).as_f64().unwrap()
-    }
-    fn looks(&self, t: i64, c: &Cs, ta: i64, ca: &Cs) -> f64 {
-        self.ask(serde_json::json!({"fn": "looks", "a": [t, c, ta, ca]})).as_f64().unwrap()
-    }
-}
 
 // ------------------------------------------------------------------------------------------------ motion, native
 

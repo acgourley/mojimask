@@ -1,1 +1,0 @@
-../native/packaging/licenses/GPL-3.0.txt

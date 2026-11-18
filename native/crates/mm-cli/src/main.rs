@@ -9,7 +9,7 @@
 //!     wait-export         wait until an export started with `call export` ends; print state.export
 //!     help                list the store's commands
 //!   mm-cli decisions ...   a project's Decisions, answered from the command line (decisions.rs)
-//!   mm-cli scan VIDEO PROJECT [--plan PLAN] [--depth [NAME]] [--motion native|python]
+//!   mm-cli scan VIDEO PROJECT [--plan PLAN] [--depth [NAME]]
 //!                          the whole scan of a video into a project folder, headless (scan.rs)
 //! Every result is one JSON line. Exit 1 on the first failing op.
 use anyhow::{anyhow, bail, Result};

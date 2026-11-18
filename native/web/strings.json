@@ -520,5 +520,5 @@
   "decisions.unnamed": "Unnamed",
   "decisions.why_we_ask": "Why we ask",
   "decisions.agent": "answered by an agent",
-  "decisions.agent_tip": "Given by a program answering for you (decisions_cli.py). Pick another answer to change it."
+  "decisions.agent_tip": "Given by a program answering for you (mm-cli decisions). Pick another answer to change it."
 }

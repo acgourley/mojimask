@@ -15,9 +15,9 @@
 //! options: --plan cpu|default|gpu|ane (a fixed detection plan; default: timed, as fastest_core)
 //!          --analysis-cpu (the analysis models on the CPU)  --depth NAME (MOJIMASK_DEPTH)
 //!          --models DIR (default ROOT/../models or $MOJIMASK_MODELS)  --cache DIR (CoreML compiles)
-//!          --python PATH  --root DIR (the repo, for Python's motion)
-//!          --motion native|python|replay (camera motion and the follower's motion evidence; default python;
-//!          replay with --replay REC, decide only)
+//!          --root DIR (the repo)
+//!          --motion native|replay (the follower's motion evidence: mm-motion, the default; or replayed from a
+//!          recording with --replay REC, decide only)
 use mm_core::pyjson::Py;
 use mm_engine::jpeg;
 use mm_engine::scan::{self, Options};

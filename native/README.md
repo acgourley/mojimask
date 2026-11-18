@@ -1,15 +1,13 @@
 # Mojimask native
 
-The Rust rewrite of mojimask: Rust (wgpu, GStreamer, ONNX Runtime) behind a thin Qt Quick host. Why this stack:
+mojimask, the app: Rust (wgpu, GStreamer, ONNX Runtime) behind a thin Qt Quick host. Why this stack:
 [docs/stack-decision.md](docs/stack-decision.md). How it fits together: [ARCHITECTURE.md](ARCHITECTURE.md). How it was
-ported, the user's decisions and the OpenCV scope: [docs/porting.md](docs/porting.md). For coding agents and the people
-working with them.
+ported from the first (Python) version, the user's decisions and the OpenCV scope: [docs/porting.md](docs/porting.md).
+For coding agents and the people working with them.
 
-The Python app (`mojimask/`, `web/`) is still the product. This one runs the whole journey on its own Rust engine
-(`--engine native`, the default; the Python engine stays behind `--engine python` for comparison): **Projects**
-(import, scan, "Deciding who's who"), the **result** after a first scan, **Decisions**, **People**, the **Editor** (the
-export's own covers drawn locally by mm-render, every editing tool of web/review.html) and **Export** (formats, trim,
-the corner mark, higher-risk mode, encoded through mm-media).
+The whole journey runs on its own Rust engine, in the app's process: **Projects** (import, scan, "Deciding who's
+who"), the **result** after a first scan, **Decisions**, **People**, the **Editor** (the covers drawn by mm-render)
+and **Export** (formats, trim, the corner mark, higher-risk mode, encoded through mm-media).
 
 ## Build
 
@@ -27,69 +25,40 @@ The first cargo build takes a few minutes; after that a change to `mm-app` rebui
 ## Run
 
 ```bash
-native/tools/mmctl start --video out/poc/clips/jazz_4k.mp4 --data out/poc/data/jazz_4k   # dev, in the background
-native/app/build/Mojimask.app/Contents/MacOS/Mojimask --dev --video test_clips/jazz.mp4 --data out/poc/data/jazz
+native/tools/mmctl start                                                  # dev, in the background
+native/app/build/Mojimask.app/Contents/MacOS/Mojimask --dev               # dev, in the foreground
 ```
 
 | flag | does |
 |---|---|
 | `--dev` | QML from `native/app/qml` on disk, reloaded on save; the developer hooks on 127.0.0.1:9200-9299 |
-| `--video CLIP`, `--data DUMP` | open a video, with cover data: a PoC dump folder (`out/poc/data/<clip>`, made by `native/tools/dump_reference.py`), the stand-in for a scanned project until the scan is ported |
+| `--video CLIP`, `--data DUMP` | open a video alone in the Editor, with cover data from a dump of the Python app's covers (`out/poc/data/<clip>`, from before the port), for working on drawing without a scan |
 | `--restore` | reopen what the store saved in `out/native/state.json` (`mmctl restart` passes it): the open project (once the engine is up), its page and frame; or a `--video` and its edits |
 | `--lib PATH` | the store dylib to load (default `native/target/debug/libmm_app.dylib`) |
-| `--engine native\|python` | the engine behind the pages: the Rust one in this process (default) or app_server.py as a sidecar |
-| `--motion python\|native` | the native engine's scan motion (and a placed cover's flow): Python's cv2 through the project's venv (default for now: native motion asks one extra question on jazz; switching is the user's call) or mm-motion (no Python at all). Shown in the dev bar |
 | `--projects DIR` | the projects folder (default: `out/native/projects` in a checkout, `~/Library/Application Support/Mojimask/Projects` bundled; `MOJIMASK_PROJECTS`) |
-| `--python PATH` | the Python for `--engine python` and `--motion python` (default: `MOJIMASK_PYTHON`, the checkout's venv) |
-| `--no-sidecar` | don't start an engine (the Editor alone, on a PoC dump) |
-| `--check [DIR]` | the self-test: the native engine scans `test_clips/jazz.mp4` (motion native, depth on when the model is there), the store exports it with covers; one JSON line ending `"ok": true` |
-| `MOJIMASK_DEPTH=anything-small` | passed to the engine: the depth model on (the covers' depth cut, the Editor's Depth view, D) |
+| `--no-sidecar` | don't start the engine (the Editor alone, on a dump) |
+| `--check [DIR]` | the self-test: the engine scans `test_clips/jazz.mp4` (depth on when the model is there), the store exports it with covers; one JSON line ending `"ok": true` |
+| `MOJIMASK_DEPTH=off` | the depth model off (it is on whenever installed: the scan's depth rule, the covers' depth cut, the Editor's Depth view, D) |
 
-**Where files are** (`mm_core::paths`): the read-only root (`web/`, `models/`, `test_clips/`: the checkout, or the
+**Where files are** (`mm_core::paths`): the read-only root (`native/web/`, `models/`, `test_clips/`: the checkout, or the
 bundle's `Contents/Resources`; `MM_ROOT`, `MOJIMASK_MODELS`) and the data folder (`state.json`, projects: `out/native/`
 in a checkout, `~/Library/Application Support/Mojimask` bundled; CoreML's compiles in
 `~/Library/Caches/org.mojimask.app/coreml`). Inside a bundle the host sets GStreamer's and GIO's environment itself
-(main.cpp `bundleEnv`). No build-machine path is compiled into a release binary (the main checkout's models and venv
-are a debug-build fallback only).
+(main.cpp `bundleEnv`). No build-machine path is compiled into a release binary (in a git worktree, debug builds use
+the main checkout's models).
 
-## The native engine (`--engine native`)
+## The engine
 
-`mm_engine::native` answers the same routes as app_server.py and review_server.py, in this process
-(`crates/mm-engine/src/native/`; the app talks to either through `mm_engine::backend::Backend`):
+`mm_engine::native` answers the pages' routes in this process (`crates/mm-engine/src/native/`; the app talks to it
+through `mm_engine::backend::Backend`, the routes the Python app's pages used):
 - the library, import, the scan (`mm_engine::scan` on a thread: its reports and "Deciding who's who" events live),
   cancel, clear cache, delete, clone fresh, relink, the pictures (thumb, preview, head);
 - per open project, one `mm_core::edits::Project`: the single writer of edits.json and facts.json, holding
-  `.server.lock` as review_server does (a Python server can't open the project meanwhile, and the reverse); ops,
-  facts, decisions (with the "whose face is this?" questions, `native/whose.rs`), undo / redo, split, propagate and
-  undo correction (`native/follow.rs`: review_server.flow_step through Python with `--motion python`, mm-motion with
-  `native`); the resolved covers (`state`), boxes, poses, formats, export labels;
+  `.server.lock`; ops, facts, decisions (with the "whose face is this?" questions, `native/whose.rs`), undo / redo,
+  split, propagate and undo correction (`native/follow.rs`, mm-motion), the portrait photo, the resolved covers
+  (`state`), boxes, poses, formats, export labels;
 - draw records from mm-records, handed to the Editor and the export directly (no JSON).
 Pictures QML loads by URL (frames, thumbnails) come from a small HTTP server of its own on 127.0.0.1:9300-9399.
-Not yet: choosing a portrait photo (`POST /api/portrait`).
-
-Checked: `native/tools/parity/appnative_journey.py` drives the whole journey through mmctl with either engine, and
-`--compare` checks edits.json byte for byte, facts.json except its time stamps, and the exports frame by frame.
-
-## The Python engine (sidecar, `--engine python`)
-
-The app starts `app_server.py` unchanged (`crates/mm-engine/src/python/sidecar.py`) on a port in 9300-9399 and talks to
-it over HTTP, as `web/app.html` does. Its log is **`out/native/sidecar.log`**; each open project's server logs to
-`out/native/projects/<id>/review_server.log`. Each project server is `native/tools/sidecar/project_server.py`:
-`mojimask/review_server.py`, unchanged, plus three routes for the native app:
-- `/api/native/setup` and `/api/native/records?from=&to=&style=&wait=&strict=`: every frame's draw records (the head box,
-  the emoji or portrait, head pose, the lighting estimate and velocity, the depth cut), decided exactly as the export
-  decides them (`review_server.render_setup`, `track.draw_order`, `Occlusion.plan`). The app draws them with mm-render's
-  `Drawer`, in the Editor and in the export (`crates/mm-app/src/records.rs`); lighting's grain is measured on the frame.
-- `/api/native/export_frame?t=&preset=&fit=&mark=&strict=`: frame t as Python's export draws it (PNG), the parity
-  reference.
-
-**One writer.** A project's `edits.json` and `facts.json` belong to its review server (it holds `.server.lock`). The
-app never writes them: every edit goes to that server as ops, facts or its own rules (`/api/ops`, `/api/facts`,
-`/api/propagate`, `/api/split_cover`, `/api/undo_correction`), and its reply is taken as the truth
-(`crates/mm-app/src/editor.rs`). Undo and redo are the server's history, shared by every page.
-
-The covers only draw when the dump was made for a video of the same size (`jazz_4k` dump on `jazz_4k.mp4`, `jazz`
-dump on `test_clips/jazz.mp4`); otherwise you see the video alone and the status line says so.
 
 ## Layout
 
@@ -98,13 +67,15 @@ dump on `test_clips/jazz.mp4`); otherwise you see the video alone and the status
 | `crates/mm-core` | plain data and rules: time (frame t <-> source pts), geometry, cover rows, edits, colour, the privacy allowlist. Unit tests live here |
 | `crates/mm-media` | GStreamer: `Decoder` (probe, seek, next on the slot timeline), frame import into wgpu (`mac/cv.rs`: zero-copy), `Exporter` (vtenc + mp4mux, audio copied) |
 | `crates/mm-render` | wgpu: own or adopted (Qt's) device, the WGSL compositor, YUV->RGB, prep, NV12, readback |
-| `crates/mm-ml` | `ort`: sessions, execution providers, pre/post-processing; `mm-ml-parity` |
-| `crates/mm-engine` | projects (for now the PoC dump + edits), jobs and progress; the scan goes here |
+| `crates/mm-ml` | `ort`: sessions, execution providers, pre/post-processing |
+| `crates/mm-engine` | the scan (`scan.rs`, detection, depth), the project server (`native/`), jobs and progress |
 | `crates/mm-app` | the store (state tree, commands, change notes), the preview decoder and player, rendering into the host's texture, export; the C ABI `include/mm_app.h` |
-| `crates/mm-cli` | the store without a window |
+| `crates/mm-cli` | the store without a window; `mm-cli scan`, `mm-cli decisions` |
+| `crates/mm-vision`, `mm-analysis`, `mm-motion`, `mm-scan`, `mm-records` | OpenCV's calls the scan needs (bit-exact), the face, body, pose and depth models' evidence, our own camera motion and head following, the scan's rules, the covers to draw |
+| `crates/mm-ctl`, `mm-pack`, `mm-bench` | mmctl, the packaging steps, the rules' benchmark |
 | `app/src` | the C++ host: `main.cpp` (start-up, live reload), `store` (bridge), `videoitem` (QQuickRhiItem), `devtools` (hooks), `platform_mac.mm` |
-| `app/qml` | `Main.qml`, `Theme.qml` (web/theme.css's tokens), `components/`, `pages/` |
-| `web/` | what the app shows and draws with: fonts, the words (`strings.json`), icons, the brand, emoji palettes and eyes, the paintings and the default portrait (`mm_core::paths::web`; the bundle's `Resources/web`). The Python app's `web/` links to these until it is retired |
+| `app/qml` | `Main.qml`, `Theme.qml` (the colours, type and sizes), `components/`, `pages/` |
+| `web/` | what the app shows and draws with: fonts, the words (`strings.json`), icons, the brand, emoji palettes and eyes, the paintings and the default portrait (`mm_core::paths::web`; the bundle's `Resources/web`) |
 | `packaging/` | the Mac bundle and disk image (`make_app.sh`, `make_dmg.sh`), the icon and the disk image's picture drawn at build time (`make_icon.swift`, `dmg_background.swift`), licence texts (`licenses/`, gathered by `mm-pack notices`) |
 | `tools/mmctl` | the hooks from the command line |
 
@@ -134,7 +105,7 @@ hooks. Every command prints JSON; it exits 1 when the app says no. `mmctl help` 
 
 ```bash
 M=native/tools/mmctl
-$M start --video out/poc/clips/jazz_4k.mp4 --data out/poc/data/jazz_4k
+$M start --video out/poc/clips/jazz_4k.mp4
 $M tree --root page-editor --depth 4     # items: type, objectName, text, scene rect, visible, enabled, value
 $M find Play                             # by visible text (or --name play-button)
 $M click Play                            # a real mouse click at its centre
@@ -158,9 +129,8 @@ $M quit
   `GET /grab`, `POST /reload`, `GET /logs`, `/wait`, `/perf`, `POST /quit`, `/restart`. The port is in
   `out/native/devtools.json`.
 - **Seeing the drawn frame exactly:** `mmctl call readback '{"path": "out/native/f.png"}'` saves the video item's texture
-  at full resolution the next time it's drawn (`store.state.readback.state` turns `"done"`). Compare with the
-  reference: `<project venv>/bin/python native/tools/compare_frames.py out/poc/data/jazz_4k/ref <dir> --json`.
-  Without a window: `native/target/debug/mm-cli --video out/poc/clips/jazz_4k.mp4 --data out/poc/data/jazz_4k call seek '{"t":40}' render out/native/f.png`.
+  at full resolution the next time it's drawn (`store.state.readback.state` turns `"done"`). Without a window:
+  `native/target/debug/mm-cli --video out/poc/clips/jazz_4k.mp4 call seek '{"t":40}' render out/native/f.png`.
 
 ### A project, by commands
 
@@ -182,12 +152,6 @@ $M call set_dev '{"on": false}'               # the pages as someone without --d
 Real key presses (`mmctl key E`) reach the pages' shortcuts only while the window is the active one; `editor_key`
 runs the same code without it.
 
-**Parity** (the app running, a public-domain project open in the Editor):
-```bash
-<venv>/bin/python native/tools/sidecar/parity.py editor --frames 0,40,80,126       # readback vs Python's export frame
-<venv>/bin/python native/tools/sidecar/parity.py export OUT.mp4 --py-export PY.mp4  # H.264 vs H.264 (POST /api/render)
-```
-
 ## Privacy (AGENTS.md)
 
 Faces never leave the machine. Here that means:
@@ -195,48 +159,40 @@ Faces never leave the machine. Here that means:
   `out/poc/clips/` (`mm_core::privacy`, by real path, so a copy elsewhere doesn't count). The rest of the window
   stays visible, so you can check the UI around anyone's video without seeing them.
 - `readback` and `mm-cli render` refuse other clips.
-- Work on jazz. Never open `out/projects/` or other clips in `test_clips/` to look at them; pictures you write go
-  under `out/`.
+- Work on jazz. Never open projects of real footage or other clips in `test_clips/` to look at them; pictures you
+  write go under `out/`.
 
 ## Tests
 
 ```bash
-cd native && cargo test                                                   # mm-core's rules, the store's helpers
-native/target/release/mm-ml-parity out/poc/results/ml/ref out/native/ml_parity.json   # ML outputs vs Python (CPU: exact)
+cd native && cargo test                                  # the rules, the store's helpers, the portrait route
+cargo run -q --release -p mm-bench -- --note "..."       # the scan's rules against jazz's census (AGENTS.md)
+native/packaging/make_app.sh                             # the Mac app; its --check scans and exports jazz
 ```
 
 ## Known gaps
 
 - **Not ported yet:** the export preview's blurred "fit" background (the preview shows a dim copy; the exported video
   has the blur); the People page's "ask" filter; the depth view's face-zone circle.
-- **The scan's motion:** `--motion native` (no Python) asks one extra question on jazz; from a checkout `python` is the
-  scan's default, the bundled app uses `native`.
 - **Seeking** an iPhone clip takes about 1.5 s (long GOP), so scrubbing is slow; forward decoding runs at 440 fps.
 - **The lighting estimate** (about 80 s on a 50 s 4K clip) shows no progress, and all records are rebuilt every 2 s
   while it runs.
-- **The corner mark** is a few levels off Python's on its letters (max error ~70 on a few pixels), so a marked export is
-  ~0.5 dB further from Python's than Python's own H.264 is.
 - **Export** decodes and converts each frame on the CPU and reads the drawn frame back: fine for 1080p, slow-ish for 4K.
-- **A portrait's own pose** differs slightly from Python's (the `image` crate's Lanczos vs PIL): roll 0.16°, same facing.
 - **Packaging:** launcher.c, check.sh and mm-cli could leave the bundle now that `mojimask-app --check` exists (about
-  -30 MB). Signed ad hoc, like the Python app; Developer ID signing and notarizing are ready in make_app.sh but untried.
+  -30 MB). Signed ad hoc, like 0.1; Developer ID signing and notarizing are ready in make_app.sh but untried.
 - **Mac only:** the host renders through Metal; Windows (D3D12) and Linux (Vulkan) need their own adopt and import code.
-- meta.json's `engine` block has a different key order and version string from Python's (cosmetic).
 
-## Bugs found in the Python app while porting
+## Known issues in the rules, carried over from the first version
 
-The Python app is frozen apart from fixes; these are fix candidates (fix Python first, then the port, which keeps
-Python's behaviour for parity).
+The port kept the Python app's behaviour exactly, including these; each is a candidate for its own change, measured
+with the rules' benchmark before and after.
 
-1. **`pose_util.facing` never returns "front":** it adds two numpy bools (a logical or), so `eyes == 2` is never true.
-   Only the review server's skeleton view is affected.
-2. **RetinaFace on CoreML MLProgram (`MOJIMASK_PLAN=gpu`) is off by up to 46% of the output range**, even with pinned
-   sizes. The default plan runs it on the ANE, which is fine; `gpu` should probably not be offered until this is
-   understood.
-3. **A possible 35 s hang at start-up** from HTTPServer's reverse-DNS lookup of 127.0.0.1 (seen in a PoC's own server):
-   check `app_server` and `review_server`.
-4. **The attach rule can move a box to a person who isn't on screen** (jazz, with our own camera motion: two
-   single-frame boxes on a man's head at frames 45 and 50 went to a person absent from 22 to 80, projected across the
-   gap). It flips on motion noise. Proposed rule (Python first, decision_bench before and after): when a fragment's box
-   overlaps a piece on screen at that frame, prefer that piece over one projected across a gap. The full native-motion
-   scan doesn't split anyone; its bench equals Python's but for one extra question.
+1. **The head's facing is never "front"** (`mm-analysis` pose_util `facing`, as Python's `pose_util.facing`): two
+   booleans are added, which is a logical or, so `eyes == 2` is never true and a face with both eyes and the nose
+   visible counts as "profile". Only the developer skeleton view uses it.
+2. **RetinaFace on CoreML's MLProgram (`MOJIMASK_PLAN=gpu`) is off by up to 46% of the output range**, even with pinned
+   sizes. The default plan runs it on the ANE, which is fine; `gpu` should not be offered until this is understood.
+3. **The attach rule can move a box to a person who isn't on screen** (jazz: two single-frame boxes on a man's head at
+   frames 45 and 50 went to a person absent from frame 22 to 80, projected across the gap). It flips on motion noise.
+   Proposed: when a fragment's box overlaps a piece on screen at that frame, prefer that piece over one projected
+   across a gap.

@@ -992,7 +992,7 @@ dependencies = [
 
 [[package]]
 name = "mm-analysis"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "mm-core",
  "mm-ml",
@@ -1003,7 +1003,7 @@ dependencies = [
 
 [[package]]
 name = "mm-app"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "gstreamer",
@@ -1023,8 +1023,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "mm-bench"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "mm-core",
+ "serde_json",
+]
+
+[[package]]
 name = "mm-cli"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "mm-app",
@@ -1035,7 +1044,7 @@ dependencies = [
 
 [[package]]
 name = "mm-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "half",
  "serde",
@@ -1043,8 +1052,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "mm-ctl"
+version = "0.2.0"
+
+[[package]]
 name = "mm-engine"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -1061,12 +1074,11 @@ dependencies = [
  "ort",
  "serde",
  "serde_json",
- "ureq",
 ]
 
 [[package]]
 name = "mm-media"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "block2",
@@ -1093,7 +1105,7 @@ dependencies = [
 
 [[package]]
 name = "mm-ml"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "image",
  "mm-core",
@@ -1104,7 +1116,7 @@ dependencies = [
 
 [[package]]
 name = "mm-motion"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "image",
  "mm-vision",
@@ -1112,8 +1124,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "mm-pack"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "serde_json",
+]
+
+[[package]]
 name = "mm-records"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "image",
@@ -1128,7 +1148,7 @@ dependencies = [
 
 [[package]]
 name = "mm-render"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -1151,7 +1171,7 @@ dependencies = [
 
 [[package]]
 name = "mm-scan"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "indexmap",
  "mm-core",
@@ -1160,7 +1180,7 @@ dependencies = [
 
 [[package]]
 name = "mm-vision"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "serde_json",

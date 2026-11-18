@@ -13,7 +13,6 @@ allowed() {
     native/web/assets/gallery/*.jpg) ;;        # old paintings, public domain (THIRD_PARTY_NOTICES.md)
     native/web/assets/icon_art.jpg) ;;         # the app icon's painting, public domain
     native/web/assets/portrait_mona.png) ;;    # the default portrait: the Mona Lisa's head, public domain
-    web/assets/gallery|web/assets/icon_art.jpg|web/assets/portrait_mona.png) ;;  # links to the three above
     test_clips/jazz.mp4) ;;                    # Our Dancing Daughters (1928), US public domain: the sample clip
     docs/media/jazz-walkthrough.mp4) ;;        # the website's screen recording of the app on jazz.mp4
     docs/media/jazz-walkthrough-poster.jpg) ;; # its poster frame

@@ -1,13 +1,12 @@
-//! `mm-cli scan VIDEO PROJECT [--plan PLAN] [--depth [NAME]] [--motion native|python]`: the whole scan of a video into
+//! `mm-cli scan VIDEO PROJECT [--plan PLAN] [--depth [NAME]]`: the whole scan of a video into
 //! a project folder (pipeline.run's steps; mm_engine::scan), headless. Progress goes to stderr, one line a report;
 //! the result (each step's numbers, newalgo's counts, seconds) is one JSON line on stdout.
 //!
 //! - `--plan`: a fixed detection plan (cpu, default, gpu, ane); without it the timed choice (onnx_core.fastest_core).
 //! - `--depth`: a depth model (`anything-small` when no name follows; `off` for none). The project's depth cache is made
 //!   natively when it has none.
-//! - `--motion`: native (mm-motion: our own camera motion and head following, no Python) or python (track.py and
-//!   follow.Clip through the project's Python; the default for now).
-//! - The other options of `mm-scan-tool` (--models, --cache, --analysis-cpu, --python, --root) are accepted too.
+//! - Camera motion and head following are mm-motion's (our own).
+//! - The other options of `mm-scan-tool` (--models, --cache, --analysis-cpu, --root) are accepted too.
 use anyhow::Result;
 use serde_json::json;
 
@@ -43,7 +42,7 @@ fn run(args: &[String]) -> Result<serde_json::Value> {
         v
     };
     if pos.len() != 2 {
-        anyhow::bail!("usage: mm-cli scan VIDEO PROJECT [--plan PLAN] [--depth [NAME]] [--motion native|python]");
+        anyhow::bail!("usage: mm-cli scan VIDEO PROJECT [--plan PLAN] [--depth [NAME]]");
     }
     // a bare --depth means the shipped model
     let mut a: Vec<String> = vec![];

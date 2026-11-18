@@ -217,19 +217,12 @@ fn start_sidecar(sh: &Arc<Shared>) -> Result<()> {
     start_native(sh)
 }
 
-/// The scan's motion setting (`--motion native|python`; python for now: native motion asks one extra question on
-/// jazz, and switching is the user's call).
-pub fn motion_setting(sh: &Shared) -> String {
-    if sh.cfg.motion.is_empty() { "python".into() } else { sh.cfg.motion.clone() }
-}
-
 /// The Rust engine (mm_engine::native): app_server's and review_server's routes in this process.
 fn start_native(sh: &Arc<Shared>) -> Result<()> {
     let root = sh.cfg.root.clone();
     let projects = if sh.cfg.projects.is_empty() { mm_core::paths::projects(Path::new(&root)).to_string_lossy().into_owned() } else { sh.cfg.projects.clone() };
-    let python = if sh.cfg.python.is_empty() { mm_core::paths::python(Path::new(&root)) } else { sh.cfg.python.clone() };
     let cache = mm_core::paths::cache_dir(Path::new(&root)).to_string_lossy().into_owned();
-    let mut args = vec!["--root".to_string(), root.clone(), "--python".into(), python, "--motion".into(), motion_setting(sh), "--cache".into(), cache];
+    let mut args = vec!["--root".to_string(), root.clone(), "--cache".into(), cache];
     let depth = std::env::var("MOJIMASK_DEPTH").ok().filter(|d| !d.is_empty() && d != "off");
     if let Some(d) = &depth {
         args.extend(["--depth".into(), d.clone()]);
@@ -251,7 +244,7 @@ fn start_native(sh: &Arc<Shared>) -> Result<()> {
         let sh = weak.upgrade()?;
         crate::records::draw_project_frame(&sh, pid, t, style).map_err(|e| log::warn(&format!("thumb: {e:#}"))).ok()
     }));
-    log::info(&format!("engine: native (motion {}, depth {}), pictures on {} ({:.2} s; projects {projects})", motion_setting(sh),
+    log::info(&format!("engine: native (depth {}), pictures on {} ({:.2} s; projects {projects})",
                        srv.cfg.depth.as_deref().unwrap_or("off"), srv.port, t0.elapsed().as_secs_f64()));
     sh.lib.lock().unwrap().sc = Some(Arc::new(mm_engine::native::Client(srv)));
     ready_library(sh)
@@ -422,7 +415,7 @@ pub fn refresh_library(sh: &Arc<Shared>) -> Result<()> {
             String::new()
         };
         l.dev_line = if l.dev {
-            format!("Dev · engine {} · scan motion {} · depth {} · server since {}", sc.engine(), motion_setting(sh), app["depth"].as_str().unwrap_or("off"),
+            format!("Dev · engine {} · depth {} · server since {}", sc.engine(), app["depth"].as_str().unwrap_or("off"),
                     short_date(app["started"].as_f64().unwrap_or(0.0)))
         } else {
             String::new()

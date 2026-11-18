@@ -8,10 +8,10 @@
 //!             screen. Frames come straight from the decoder (lossless, upright, the "detect" colour), not from the
 //!             JPEGs, which shift borderline detections.
 //!   motion    camera motion between frames (mats_v2.npy), by the motion setting ([`Motion`]): mm-motion's camera
-//!             fit on the detect step's frames as they are decoded (native), or Python's track.camera_motion
+//!             fit on the detect step's frames as they are decoded
 //!   depth     with a depth model on, the depth cache when the project has none ([`crate::depth`], native)
 //!   decide    mm-scan's newalgo with this crate's evidence ([`crate::evidence`]); the follower's motion evidence
-//!             from mm-motion (native), Python (python, over a pipe) or a recording (replay, decide only)
+//!             from mm-motion (native) or a recording (replay, decide only)
 //!   done
 //!
 //! Profile "core": YOLOv5-Face (tiled) + RetinaFace-R50 + pose (full keypoints -> head boxes, dets/pose_head.json).
@@ -49,8 +49,7 @@ pub struct Options {
     pub engine_cache: Option<PathBuf>,
     /// a fixed plan instead of the timed one ("cpu" for parity)
     pub plan: Option<String>,
-    /// Python (the project's venv) and the repo root, for what Python still computes with `motion: Python`
-    pub python: String,
+    /// the repo root (or the bundle's Resources)
     pub root: PathBuf,
     /// MOJIMASK_DEPTH for the decide step (None: off)
     pub depth: Option<String>,
@@ -62,9 +61,9 @@ pub struct Options {
 
 impl Options {
     /// The scan's command-line options (mm-scan-tool, mm-cli scan):
-    ///   --plan cpu|default|gpu|ane  --analysis-cpu  --depth NAME|off  --motion native|python|replay  --replay REC
+    ///   --plan cpu|default|gpu|ane  --analysis-cpu  --depth NAME|off  --motion native|replay  --replay REC
     ///   --models DIR (default $MOJIMASK_MODELS, else ROOT/models)  --cache DIR (default mm_core::paths::cache_dir)
-    ///   --engine-cache FILE  --python PATH  --root DIR
+    ///   --engine-cache FILE  --root DIR
     pub fn from_args(a: &[String]) -> Result<Options> {
         let flag = |name: &str| a.iter().position(|x| x == name).and_then(|i| a.get(i + 1).cloned());
         // (mm_core::paths: the root, MOJIMASK_MODELS, the caches; no build-machine paths in a release build)
@@ -78,7 +77,7 @@ impl Options {
             Some(m) => Motion::parse(&m, replay.as_deref())?,
             None => match &replay {
                 Some(r) => Motion::Replay(PathBuf::from(r)),
-                None => Motion::Python,
+                None => Motion::Native,
             },
         };
         Ok(Options {
@@ -86,7 +85,6 @@ impl Options {
             cache: Some(flag("--cache").map(PathBuf::from).unwrap_or_else(|| mm_core::paths::cache_dir(&root))),
             engine_cache: flag("--engine-cache").map(PathBuf::from),
             plan: flag("--plan"),
-            python: flag("--python").unwrap_or_else(|| mm_core::paths::python(&root)),
             root,
             depth: flag("--depth").filter(|d| d != "off"),
             analysis_cpu: a.iter().any(|x| x == "--analysis-cpu"),
@@ -95,26 +93,23 @@ impl Options {
     }
 }
 
-/// The motion setting (`--motion native|python|replay`).
+/// The motion setting (`--motion native|replay`).
 #[derive(Clone, Debug, PartialEq)]
 pub enum Motion {
     /// mm-motion: our own camera motion and head following (no Python)
     Native,
-    /// Python's track.camera_motion and follow.Clip (cv2), as the Python scan computes them
-    Python,
     /// the decide step's motion evidence replayed from a recording (tools/parity/scan_record.py's rec/); decide only
     Replay(PathBuf),
 }
 
 impl Motion {
-    /// "native", "python" or "replay:REC" (or "replay" with `rec`).
+    /// "native" or "replay:REC" (or "replay" with `rec`).
     pub fn parse(s: &str, rec: Option<&str>) -> Result<Motion> {
         match s {
             "native" => Ok(Motion::Native),
-            "python" => Ok(Motion::Python),
             "replay" => rec.map(|r| Motion::Replay(PathBuf::from(r))).ok_or_else(|| anyhow!("--motion replay needs a recording (--replay REC)")),
             s if s.starts_with("replay:") => Ok(Motion::Replay(PathBuf::from(&s[7..]))),
-            s => Err(anyhow!("--motion {s}: native, python or replay")),
+            s => Err(anyhow!("--motion {s}: native or replay")),
         }
     }
 }
@@ -405,24 +400,6 @@ pub fn prepare_and_detect(video: &str, proj: &Path, o: &Options, report: Report)
     Ok(DetectStats { frames: t, plan: core.plan.clone(), seconds: secs, per_frame_ms: secs / t.max(1) as f64 * 1000.0, setup_seconds: setup, camera_seconds: camera_s })
 }
 
-/// The motion step (mats_v2.npy) through Python's track.camera_motion (`--motion python`).
-pub fn motion_py(video: &str, proj: &Path, o: &Options) -> Result<()> {
-    let code = "import json, sys, numpy as np\nfrom mojimask import track as T\nmeta = json.load(open(sys.argv[2] + '/meta.json'))\nnp.save(sys.argv[2] + '/mats_v2.npy', np.array(T.camera_motion(sys.argv[1], meta=meta)))\n";
-    // The child runs in o.root, so relative paths (the caller's) must be made absolute first.
-    let st = std::process::Command::new(&o.python)
-        .arg("-c")
-        .arg(code)
-        .arg(std::path::absolute(video)?)
-        .arg(std::path::absolute(proj)?)
-        .current_dir(&o.root)
-        .env("PYTHONPATH", &o.root)
-        .status()?;
-    if !st.success() {
-        return Err(anyhow!("camera motion (Python) failed"));
-    }
-    Ok(())
-}
-
 /// The decide step with real evidence. Returns newalgo's result (plus timings) and, for parity runs, its stages and
 /// viz events.
 pub fn decide(proj: &Path, o: &Options) -> Result<(Dict, mm_scan::newalgo::Stages, mm_scan::viz::Viz, serde_json::Value)> {
@@ -455,7 +432,6 @@ pub fn decide_with(proj: &Path, o: &Options, sink: Option<Box<dyn FnMut(&Py)>>) 
             usage = Some(u);
             e.motion
         }
-        Motion::Python => Box::new(ev::PyMotion::start(&o.python, &o.root, proj)?),
         Motion::Native => Box::new(ev::NativeMotion::new(frames.clone())),
     };
     let depth: Option<Box<dyn mm_scan::evidence::Depth>> = match &o.depth {
@@ -513,9 +489,6 @@ fn scan_impl(video: &str, proj: &Path, o: &Options, report: Report, sink: Option
     let det = prepare_and_detect(video, proj, o, report)?;
     report("motion", 0.0, serde_json::json!({}));
     let tm = Instant::now();
-    if o.motion == Motion::Python {
-        motion_py(video, proj, o)?;
-    }
     let motion_s = tm.elapsed().as_secs_f64(); // native: 0 here (the camera ran beside detection: detect.camera_seconds)
     report("motion", 1.0, serde_json::json!({}));
     let mut depth_s = None;

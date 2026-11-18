@@ -191,7 +191,10 @@ pub fn draw(sh: &Shared, g: &mut GpuState, target_key: usize, target: Option<(wg
     if let Some(r) = recs {
         // a project: its records, drawn as the export draws them (mm-render's Drawer)
         queue.submit([enc.finish()]);
-        let key = format!("{}|{}", r.pid, r.photos.len());
+        // a new drawer when the pictures it can draw change (a portrait photo chosen: the same count, another file)
+        let mut photos: Vec<_> = r.photos.iter().map(|(k, v)| format!("{k}={v}")).collect();
+        photos.sort();
+        let key = format!("{}|{}|{}", r.pid, r.setup.portrait_photo, photos.join("|"));
         if g.drawer.as_ref().is_none_or(|(k, _)| *k != key) {
             let eyes = crate::records::eyes(&r.setup)?;
             let pics = crate::records::pictures(r.photos.clone(), r.setup.portrait_photo.clone());

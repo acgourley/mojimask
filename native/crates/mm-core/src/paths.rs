@@ -12,7 +12,7 @@
 //! venv, for a worktree that has none) exist only in debug builds.
 use std::path::{Path, PathBuf};
 
-/// The main checkout, when `root` is a git worktree (debug builds only: a worktree has no models or venv of its own).
+/// The main checkout, when `root` is a git worktree (debug builds only: a worktree has no models of its own).
 /// A worktree's `.git` is a file, "gitdir: <main>/.git/worktrees/<name>".
 #[cfg(debug_assertions)]
 fn dev_main(root: &Path) -> Option<PathBuf> {
@@ -52,8 +52,7 @@ pub fn root() -> PathBuf {
 }
 
 /// The files the app shows and draws with (fonts, the words, icons, brand, palettes, emoji eyes, pictures):
-/// `native/web` in a checkout, the bundle's `Resources/web`. (Laid out as the Python app's `web/`, whose copies of
-/// these are links here until it is retired.)
+/// `native/web` in a checkout, the bundle's `Resources/web`.
 pub fn web(root: &Path) -> PathBuf {
     if bundled(root) { root.join("web") } else { root.join("native/web") }
 }
@@ -98,19 +97,3 @@ pub fn models(root: &Path) -> PathBuf {
     here
 }
 
-/// The project's Python (only for `--engine python` and the scan's `--motion python`): MOJIMASK_PYTHON, else the root's
-/// .venv (debug builds: else the main checkout's), else python3 on the PATH.
-pub fn python(root: &Path) -> String {
-    if let Some(p) = std::env::var_os("MOJIMASK_PYTHON") {
-        return p.to_string_lossy().into_owned();
-    }
-    let here = root.join(".venv/bin/python");
-    if here.exists() {
-        return here.to_string_lossy().into_owned();
-    }
-    #[cfg(debug_assertions)]
-    if let Some(py) = dev_main(root).map(|m| m.join(".venv/bin/python")).filter(|p| p.exists()) {
-        return py.to_string_lossy().into_owned();
-    }
-    "python3".into()
-}

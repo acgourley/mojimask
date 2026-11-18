@@ -1,14 +1,11 @@
 //! Following a cover you placed (review_server's propagate): mm_core::edits::Follow for the native engine.
 //!
-//! - **flow_step** (move a box from one frame to the next by the flow inside it): with the scan's motion setting
-//!   `python`, review_server.flow_step itself, asked of Python (cv2's corners and pyramidal LK on the frames read as
-//!   cv2.IMREAD_GRAYSCALE: exactly the Python app's covers); with `native`, mm-motion's head motion (our own; the box
-//!   moves by its similarity, its size changes by at most 10% a frame, as flow_step clips it).
+//! - **flow_step** (move a box from one frame to the next by the flow inside it): mm-motion's head motion (our own;
+//!   the box moves by its similarity, its size changes by at most 10% a frame, as review_server.flow_step clipped it).
 //! - **face_evidence** (what a followed box snaps to): review_server.face_evidence and _someone_else, ported: the
 //!   closest weak detection of about the box's size (track.fused_frames at WEAK_DET), or a confident skeleton head,
 //!   within PROP_SNAP box sizes, never a neighbour's tracked face.
-use crate::evidence::{NativeMotion, PyMotion};
-use crate::scan::Motion;
+use crate::evidence::NativeMotion;
 use mm_core::edits::{Follow, PROP_SNAP};
 use mm_records::resolve::{from_cs, Track};
 use mm_scan::evidence::Motion as _;
@@ -18,26 +15,17 @@ use std::sync::Arc;
 
 #[derive(Clone, Debug)]
 pub struct Cfg {
-    pub motion: Motion,
-    pub python: String,
-    pub root: PathBuf,
     pub work: PathBuf,
 }
 
 impl Cfg {
-    pub fn new(o: &crate::scan::Options, work: &std::path::Path) -> Cfg {
-        Cfg { motion: o.motion.clone(), python: o.python.clone(), root: o.root.clone(), work: work.to_path_buf() }
+    pub fn new(_o: &crate::scan::Options, work: &std::path::Path) -> Cfg {
+        Cfg { work: work.to_path_buf() }
     }
 }
 
-enum Flow {
-    Py(PyMotion),
-    Native(NativeMotion),
-    None(String),
-}
-
 pub struct Follower {
-    flow: Flow,
+    flow: NativeMotion,
     w: f64,
     h: f64,
     auto: Arc<Vec<Track>>,
@@ -48,13 +36,7 @@ pub struct Follower {
 }
 
 pub fn make(cfg: &Cfg, auto: Arc<Vec<Track>>, poses: Arc<Vec<Vec<Vec<f64>>>>, _n: usize, w: usize, h: usize) -> Box<dyn Follow + Send> {
-    let flow = match &cfg.motion {
-        Motion::Python => match PyMotion::start(&cfg.python, &cfg.root, &cfg.work) {
-            Ok(m) => Flow::Py(m),
-            Err(e) => Flow::None(format!("{e:#}")),
-        },
-        _ => Flow::Native(NativeMotion::new(Arc::new(crate::evidence::Frames::new(&cfg.work)))),
-    };
+    let flow = NativeMotion::new(Arc::new(crate::evidence::Frames::new(&cfg.work)));
     let spec: Vec<(&str, f64)> = mm_scan::geom::CORE_DETS.iter().map(|(n, _)| (*n, mm_scan::geom::WEAK_DET)).collect();
     let low = mm_scan::geom::fused_frames(&cfg.work.join("dets"), &spec).unwrap_or_default();
     Box::new(Follower {
@@ -105,14 +87,7 @@ impl Follower {
 
 impl Follow for Follower {
     fn flow_step(&mut self, from: i64, to: i64, c: [f64; 3]) -> Option<[f64; 3]> {
-        match &self.flow {
-            Flow::Py(m) => m.flow_step(from, to, &c),
-            Flow::Native(m) => Self::native_step(m, from, to, c, self.w, self.h),
-            Flow::None(e) => {
-                super::log(&format!("no flow for covers: {e}"));
-                None
-            }
-        }
+        Self::native_step(&self.flow, from, to, c, self.w, self.h)
     }
 
     fn face_evidence(&mut self, u: i64, c: [f64; 3], prev: [f64; 3], step: i64) -> Option<[f64; 3]> {

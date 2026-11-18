@@ -7,15 +7,14 @@ This is the Rust rewrite of mojimask: a native app on Mac now, and Windows and L
 - **ONNX Runtime** (`ort`) for the models;
 - **Qt Quick** for the window.
 
-The Python app (`mojimask/`, `web/`) stays the product until this one does everything it does.
+It replaced the first, Python version of mojimask (0.1) in 0.2; how and why: [docs/porting.md](docs/porting.md).
 
 ## Three rules that shape everything
 
 1. **One store, driven by commands.**
    - All app state lives in Rust as one serialisable tree.
    - QML reads it (`store.state.editor.t`) and changes it only through `store.call("seek", {t: 10})`.
-   - The agent hooks call the same `call`, so an agent drives the app exactly as a click does (like
-     `decisions_cli.py` today).
+   - The agent hooks call the same `call`, so an agent drives the app exactly as a click does.
    - There's no business logic in QML or C++.
 2. **The C++ is a thin host.** It does four things and nothing else:
    - shows QML;

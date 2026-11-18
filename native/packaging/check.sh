@@ -1,8 +1,7 @@
 #!/bin/sh
 # The bundle's self-test (`Mojimask --check [DIR]`; the launcher sets the GStreamer and MM_ROOT environment first):
 # scan the sample clip with the bundled engine, models and GStreamer, export it, and print one JSON report whose
-# last key is "ok". Exit 0 only when it is true. Like the Python app's `--check` (desktop.py), the build fails
-# without it (make_app.sh runs it).
+# last key is "ok". Exit 0 only when it is true. The build fails without it (make_app.sh runs it).
 #
 # Uses only the bundle and /bin/sh tools: mm-cli for the scan (the native engine: motion native, depth on, the
 # timed detection plan) and for the export (GStreamer: vtenc + mp4mux). Work goes to DIR (default: a new temp folder,

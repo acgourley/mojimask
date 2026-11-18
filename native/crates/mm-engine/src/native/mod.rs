@@ -322,7 +322,6 @@ impl Server {
                 info["stale"] = json!(false);
                 info["motion"] = json!(match &self.cfg.scan.motion {
                     crate::scan::Motion::Native => "native".to_string(),
-                    crate::scan::Motion::Python => "python".to_string(),
                     crate::scan::Motion::Replay(r) => format!("replay:{}", r.display()),
                 });
             }

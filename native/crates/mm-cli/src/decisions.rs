@@ -399,7 +399,7 @@ fn session(args: &[String]) -> Result<()> {
 
 /// For a facts log (the project's, or FILE): after each fact in log order, the derived edits fields and the
 /// decision list's fingerprint (one JSON line each).
-/// The native facts.answers for a bench (tools/bench's replay, which otherwise calls Python's): the decision records
+/// facts.answers over a pipe, for a program that plays the Decisions page through: the decision records
 /// and hidden boxes once, then a facts list per line, each answered with the records' answers as one line of JSON.
 fn answers_serve() -> Result<()> {
     use std::io::{BufRead, Write};
