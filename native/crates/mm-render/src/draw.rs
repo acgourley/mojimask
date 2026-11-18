@@ -1,7 +1,7 @@
 //! Drawing one frame from its records, in any style: track.draw_frame on the GPU.
 //!
 //! `Drawer::draw(src, record, near)` -> a new texture with the frame's covers drawn:
-//!   - emoji / portrait: the records become compositor rows (`FrameRecord::rows`: eyes on the person's eyes, head pose
+//!   - emoji / portrait / orb: the records become compositor rows (`FrameRecord::rows`: eyes on the person's eyes, head pose
 //!     drawn by the shader, lighting applied) over one atlas slice per picture (emoji through CoreText, the portrait
 //!     photo), composited with motion blur, grain and the depth cut (compose.wgsl);
 //!   - blur / pixelate / solid: `styles` over each cover's circle, far to near; with a depth guide, the part of a cover
@@ -71,7 +71,7 @@ impl Drawer {
         let (w, h) = (src.width(), src.height());
         let out = out_texture(device, w, h, self.format);
         match rec.style.as_str() {
-            "emoji" | "portrait" => {
+            "emoji" | "portrait" | "orb" => {
                 let (rows, pics) = self.rows(rec)?;
                 let fc = FrameCovers { rows, pics, seed: rec.seed as f32, soft: rec.soft as f32, near };
                 let slices = &self.slices;

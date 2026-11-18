@@ -493,7 +493,7 @@ pub fn publish_page(sh: &Shared) {
     let photo = f["photo"].as_bool().unwrap_or(false);
     let chosen = edits["cover_style"].as_str().unwrap_or("emoji").to_string();
     let style = if x.strict { "solid".to_string() } else { chosen.clone() };
-    let icon = match style.as_str() { "emoji" => "😎", "blur" => "◌", "pixelate" => "▦", "solid" => "●", _ => "🖼️" };
+    let icon = match style.as_str() { "emoji" => "😎", "blur" => "◌", "pixelate" => "▦", "solid" => "●", "orb" => "🟡", _ => "🖼️" };
     let mut styles = tx.t("export.covered_with", &crate::text::v(&[("style", format!("{icon} {}", tx.s(&format!("style.{style}"))))]));
     if x.strict && chosen != "solid" {
         styles += &format!(" <span style=\"color:#8b9099\">{}</span>", tx.s("export.higher_risk_mode"));

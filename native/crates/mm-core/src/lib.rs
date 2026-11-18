@@ -20,6 +20,7 @@ pub mod facts;
 pub mod geometry;
 pub mod np;
 pub mod ops;
+pub mod orb;
 pub mod palettes;
 pub mod paths;
 pub mod privacy;

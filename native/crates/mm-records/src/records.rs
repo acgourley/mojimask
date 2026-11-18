@@ -43,6 +43,13 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
 pub const PORTRAIT_KEY: &str = "\u{1F5BC}\u{FE0F}";
+/// The orb style (developer only): its picture is drawn this much bigger than an emoji's, as the picture leaves room
+/// round the head sphere for the ears (mm_core::orb::HALF): the sphere comes out ~1.15 head boxes across, about an
+/// emoji face's size. Its pose is smoothed along each piece over ORB_SIGMA frames with a pull of ORB_PRIOR to
+/// neutral (head_pose's track_angles uses 4 and 0.15).
+pub const ORB_SCALE: f64 = 1.1;
+pub const ORB_SIGMA: f64 = 3.0;
+pub const ORB_PRIOR: f64 = 0.15;
 pub const PORTRAIT_PREFIX: &str = "portrait:";
 /// emoji size vs head box (track.add_args' --scale)
 pub const SCALE: f64 = 1.25;
@@ -375,6 +382,8 @@ struct Setup {
     shown: BTreeSet<String>,
     light: Option<Light>,
     head_pose: Option<BTreeMap<String, BTreeMap<usize, (f64, f64, i32)>>>,
+    /// the orb style: {piece: {t: (yaw, pitch, roll)}} in degrees (head3d::track_poses)
+    orb_pose: Option<BTreeMap<String, BTreeMap<usize, (f64, f64, f64)>>>,
     portrait: Option<String>,
     saturation: f64,
     key: String,
@@ -529,11 +538,14 @@ impl Records {
         if ask.strict {
             rstyle = "solid".into();
         }
-        let scale = self.opts.scale * if ask.strict { 1.3 } else { 1.0 };
+        let mut scale = self.opts.scale * if ask.strict { 1.3 } else { 1.0 };
+        if rstyle == "orb" {
+            scale *= ORB_SCALE;
+        }
         let links = R::links_for(&edits);
         let pf = R::resolve(&self.proj.auto, &edits, &self.proj.mats, self.proj.n, &links, true)?;
         let mut st = LT::settings(&edits);
-        if rstyle != "emoji" && rstyle != "portrait" {
+        if rstyle != "emoji" && rstyle != "portrait" && rstyle != "orb" {
             st.insert("enabled", Py::Bool(false));
         }
         let enabled = st.get("enabled").is_some_and(Py::truthy);
@@ -563,11 +575,18 @@ impl Records {
         } else {
             None
         };
+        let orb_pose = (rstyle == "orb").then(|| {
+            let items: Vec<Vec<mm_analysis::head_pose::Item>> = pf
+                .iter()
+                .map(|f| f.iter().map(|x| mm_analysis::head_pose::Item { tid: x.tid.clone(), c: x.c, kind: x.kind.to_string(), piece: Some(x.piece.clone()) }).collect())
+                .collect();
+            mm_analysis::head3d::track_poses(&items, &self.proj.poses, ORB_SIGMA, ORB_PRIOR)
+        });
         let portrait = (rstyle == "portrait").then(|| key_for(project_photo(&self.proj.work, &edits)));
         let saturation = LT::film_settings(1.0, 0.0, &LT::settings(&edits)).0;
         // (the key uses readiness *after* a wait, as the helper's cache key does)
         let key = format!("{}|{}|{}|{}|{}", self.rev, style, ask.strict, self.light_ready(), ask.wait);
-        self.setup = Some(Setup { pf, style: rstyle, scale, overrides, shown, light, head_pose, portrait, saturation, key, recs: HashMap::new() });
+        self.setup = Some(Setup { pf, style: rstyle, scale, overrides, shown, light, head_pose, orb_pose, portrait, saturation, key, recs: HashMap::new() });
         Ok(())
     }
 
@@ -657,8 +676,13 @@ impl Records {
             rec.insert("tid", Py::from(it.tid.as_str()));
             rec.insert("piece", Py::from(piece.as_str()));
             rec.insert("c", Py::List(it.c.iter().map(|&v| Py::Float(v)).collect()));
-            if s.style == "emoji" || s.style == "portrait" {
-                let ch = if s.style == "portrait" {
+            if s.style == "emoji" || s.style == "portrait" || s.style == "orb" {
+                let ch = if s.style == "orb" {
+                    // the picture turned as the head is (yaw, pitch); the shader tilts it by roll
+                    let (y, p, r) = s.orb_pose.as_ref().and_then(|h| h.get(piece)).and_then(|m| m.get(&t)).copied().unwrap_or((0.0, 0.0, 0.0));
+                    rec.insert("pose", Py::List(vec![Py::Float(r), Py::Float(0.0), Py::Int(0)]));
+                    mm_core::orb::key(y, p)
+                } else if s.style == "portrait" {
                     s.portrait.clone().filter(|p| !p.is_empty()).unwrap_or_else(|| PORTRAIT_KEY.to_string())
                 } else {
                     R::emoji_for(&it.tid, &s.overrides)

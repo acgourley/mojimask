@@ -49,7 +49,8 @@ pub struct Ui {
     pub timeline: Option<(Value, Value)>,
 }
 
-const STYLES: [&str; 5] = ["emoji", "blur", "pixelate", "solid", "portrait"];
+/// "orb" (the 3-D head, mm_core::orb) is offered only in developer mode
+const STYLES: [&str; 6] = ["emoji", "blur", "pixelate", "solid", "portrait", "orb"];
 pub const SLIDERS: [(&str, f64, f64, f64); 7] = [
     ("mix", 0.0, 1.0, 0.05),
     ("level", 0.3, 2.0, 0.05),
@@ -306,6 +307,7 @@ fn make_view(sh: &Shared, doc: &Value, ui: &Ui, decs: &[Value], palettes: &Value
     };
     let styles: Vec<Value> = STYLES
         .iter()
+        .filter(|k| **k != "orb" || sh.dev() || **k == style)
         .map(|k| {
             let tip = match *k {
                 "solid" => tx.t("edit.style_tip.solid", &[]),
@@ -361,7 +363,7 @@ fn make_view(sh: &Shared, doc: &Value, ui: &Ui, decs: &[Value], palettes: &Value
     let swatch = scene_swatch(lstat, t);
     let light = json!({"enabled": ls["enabled"], "grain": ls["grain"], "fixed": !ls["light_colour"].is_null(),
                        "colour": ls["light_colour"], "sliders": sliders, "status": status, "ready": lstat["ready"],
-                       "shown": style == "emoji" || style == "portrait", "swatch": swatch,
+                       "shown": style == "emoji" || style == "portrait" || style == "orb", "swatch": swatch,
                        "tips": {"enabled": tip(tx, "enabled"), "light_colour": tip(tx, "light_colour"), "grain": tip(tx, "grain")}});
     let depth = if ui.depth_view { ui.depth.get(&t).cloned().unwrap_or(Value::Null) } else { Value::Null };
     let pose = if ui.pose_view { ui.pose.get(&t).cloned().unwrap_or(Value::Null) } else { Value::Null };
@@ -638,7 +640,7 @@ pub const HELP: &[(&str, &str)] = &[
     ("editor_draw", "{x0, y0, x1, y1}: drag out a box (video px): corrects the selected hand-made cover here, else adds one"),
     ("editor_move", "{piece, dx, dy}: move a hand-made cover on the shown frame by (dx, dy) video px (its placement here)"),
     ("editor_act", "{what}: notface | restore | split | trim_start | trim_end | restore_length | undo_correction | emoji | toggle_show"),
-    ("editor_style", "{style}: emoji | blur | pixelate | solid | portrait (the edits' cover_style)"),
+    ("editor_style", "{style}: emoji | blur | pixelate | solid | portrait | orb (the edits' cover_style; orb: developer only)"),
     ("editor_toggle", "{what}: view (V) | depth (D) | pose (B) | keys (?)"),
     ("editor_light", "{key, value, live?}: a lighting setting; live: drawn but not saved yet (a slider being dragged)"),
     ("editor_light_end", "save the lighting being dragged (one undo step)"),

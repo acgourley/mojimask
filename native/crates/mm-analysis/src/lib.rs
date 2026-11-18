@@ -14,6 +14,7 @@
 pub mod appearance;
 pub mod depth;
 pub mod faces;
+pub mod head3d;
 pub mod head_pose;
 pub mod models;
 /// numpy's arithmetic (shared with mm-scan): [`mm_core::np`].

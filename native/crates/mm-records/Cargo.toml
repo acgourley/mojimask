@@ -26,3 +26,7 @@ path = "src/bin/mm-records.rs"
 [[bin]]
 name = "lighting-check"
 path = "src/bin/lighting-check.rs"
+
+[[bin]]
+name = "pose-orbs"
+path = "src/bin/pose_orbs.rs"

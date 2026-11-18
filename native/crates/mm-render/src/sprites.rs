@@ -17,6 +17,9 @@ use mm_core::cover::Slice;
 
 /// emoji_sprite's size; portraits are drawn at twice it.
 pub const SPRITE: u32 = 160;
+/// the orb style's pictures (mm_core::orb): bigger than SPRITE as they are drawn bigger (records::ORB_SCALE) and
+/// carry room for the ears
+pub const ORB_SIZE: u32 = 224;
 
 // ------------------------------------------------------------------ Pillow's resampler (Resample.c), Lanczos
 
@@ -242,6 +245,11 @@ pub fn portrait(photo: &image::RgbaImage, size: u32) -> image::RgbaImage {
 pub fn for_key(key: &str, photo: &dyn Fn(&str) -> Result<image::RgbaImage>) -> Result<image::RgbaImage> {
     if mm_core::cover::is_portrait(key) {
         return Ok(portrait(&photo(key)?, SPRITE * 2));
+    }
+    if let Some((yaw, pitch)) = mm_core::orb::parse(key) {
+        // the orb style's picture, already turned; drawn bigger than an emoji's (ORB_SIZE), as the records draw it
+        let n = ORB_SIZE;
+        return image::RgbaImage::from_raw(n, n, mm_core::orb::picture(yaw, pitch, n)).ok_or_else(|| anyhow!("orb picture"));
     }
     emoji(key, SPRITE)
 }

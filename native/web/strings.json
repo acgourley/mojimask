@@ -21,6 +21,8 @@
   "style.solid.hint": "Most robust",
   "style.portrait": "Portrait",
   "style.portrait.hint": "One headshot on every head",
+  "style.orb": "3D head",
+  "style.orb.hint": "Developer only: a 3D head that turns with each person",
   "nav.label": "Steps",
   "nav.projects": "Projects",
   "nav.decisions": "Decisions",

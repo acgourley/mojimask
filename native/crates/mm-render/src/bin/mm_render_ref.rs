@@ -98,7 +98,7 @@ fn main() -> Result<()> {
             };
             let img = image::open(refd.join("in").join(format!("{t:05}.png")))?.to_rgba8();
             let src = mm_render::compositor::upload_rgba(&gpu.device, &gpu.queue, &img);
-            if write_rows && (rec.style == "emoji" || rec.style == "portrait") {
+            if write_rows && (rec.style == "emoji" || rec.style == "portrait" || rec.style == "orb") {
                 let (rows, pics) = drawer.rows(&rec)?;
                 std::fs::write(outd.join(c).join(format!("{t:05}.rows.json")),
                                serde_json::to_string(&serde_json::json!({"rows": rows, "pics": pics}))?)?;

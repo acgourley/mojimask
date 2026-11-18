@@ -61,7 +61,8 @@ pub const STEADY_ENV: usize = 2;
 pub const STEADY_KEEP: f64 = 0.9;
 pub const EMOJI: [&str; 24] =
     ["😀", "😎", "🤩", "🥳", "😜", "🤪", "😺", "🐸", "🐵", "🦄", "👽", "🤖", "🎃", "👻", "🌝", "🌞", "🍩", "🍕", "🦊", "🐼", "🐯", "🐶", "🐙", "🦋"];
-pub const STYLES: [&str; 5] = ["emoji", "blur", "pixelate", "solid", "portrait"];
+/// "orb": the developer-only 3-D head (mm_core::orb)
+pub const STYLES: [&str; 6] = ["emoji", "blur", "pixelate", "solid", "portrait", "orb"];
 
 /// One scan track (review_server.AUTO's entry).
 #[derive(Clone, Debug)]
