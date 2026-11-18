@@ -3,6 +3,7 @@
 //!
 //!     cargo run --release -p mm-bench -- --note "what changed" [--clips jazz,party360,party4k]
 //!     rule-bench --history [CLIP]           (every logged jazz run, one line each)
+//!     rule-bench --score PROJECT            (a jazz project someone answered, against the census)
 //!
 //! Each clip's detection, camera motion (mats_v2.npy) and depth cache (anything-small) are made once, by
 //! `mm-scan-tool scan`, in out/native/rules/<clip>/base_native. Every run copies that (APFS clones) to
@@ -30,6 +31,10 @@
 //!   same-person questions a person can be asked. One JSON line each.
 //!
 //! Every line, with the note, also goes to out/native/rules/runs.jsonl.
+//!
+//! `--score PROJECT` grades a jazz project that someone (a person, an agent through `mm-cli decisions`) answered: each
+//! answer they gave against the census's, and the result their answers leave (the same "result" numbers), beside the
+//! census's own play-through of that project as the best it could be. Nothing is logged.
 use anyhow::{anyhow, bail, Context, Result};
 use mm_core::facts as FX;
 use mm_core::pydict;
@@ -829,6 +834,36 @@ fn append_line(path: &Path, line: &str) -> Result<()> {
     Ok(())
 }
 
+/// `--score PROJECT`: the answers given in a jazz project (facts.json, by a person or an agent) against the census.
+fn score(census: &Path, proj: &Path) -> Result<Py> {
+    let truth = Truth::new(census, proj)?;
+    let hidden = strs(truth.pt.get("hidden"));
+    let ds = decisions(proj)?;
+    let doc = if proj.join(FX::FILE).exists() { load(&proj.join(FX::FILE))? } else { pydict![("facts", Py::List(vec![]))] };
+    let facts = FX::facts_of(&doc).to_vec();
+    let out = FX::answers(&ds, &facts, &hidden);
+    let (mut right, mut asked) = (Counter::default(), Counter::default());
+    let mut wrong = vec![];
+    for d in out.iter().filter(|d| d.get("by").as_str() == Some("user")) {
+        let kind = d.get("kind").as_str().unwrap_or("");
+        let (given, census) = (d.get("answer").py_str(), truth.answer(d));
+        asked.add(kind, 1);
+        if given == census {
+            right.add(kind, 1);
+        } else {
+            wrong.push(pydict![("id", d.get("id").clone()), ("given", given), ("census", census)]);
+        }
+    }
+    let open = out.iter().filter(|d| !d.get("by").truthy()).count();
+    let cov = Covers::new(&truth, &facts, &hidden);
+    let best = replay(&ds, &hidden, &|d| truth.answer(d))?;
+    let best_cov = Covers::new(&truth, &best.facts, &hidden);
+    Ok(pydict![("project", proj.display().to_string()), ("answered", asked.total()), ("right", right.total()),
+               ("answered_by_kind", asked.py()), ("right_by_kind", right.py()), ("still_open", open),
+               ("wrong", Py::List(wrong)), ("result", result(&truth, &cov)),
+               ("census_result", result(&truth, &best_cov)), ("census_asked", best.asked.total())])
+}
+
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let flag = |name: &str| args.iter().position(|a| a == name).map(|i| args.get(i + 1).cloned().unwrap_or_default());
@@ -844,8 +879,12 @@ fn main() -> Result<()> {
         }
         return Ok(());
     }
+    if let Some(p) = flag("--score") {
+        println!("{}", score(&places.truth(), Path::new(&p))?.dumps_indent(1));
+        return Ok(());
+    }
     if args.iter().any(|a| a == "-h" || a == "--help") {
-        println!("rule-bench --note TEXT [--clips jazz,party360,party4k] [--no-build]\nrule-bench --history [CLIP]");
+        println!("rule-bench --note TEXT [--clips jazz,party360,party4k] [--no-build]\nrule-bench --history [CLIP]\nrule-bench --score PROJECT");
         return Ok(());
     }
     let note = flag("--note").unwrap_or_default();

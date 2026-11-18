@@ -18,6 +18,7 @@ use serde_json::{json, Value};
 use std::time::Duration;
 
 mod decisions;
+mod strips;
 mod scan;
 
 fn main() {

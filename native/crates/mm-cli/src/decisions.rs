@@ -4,6 +4,7 @@
 //! ```text
 //! mm-cli decisions projects
 //! mm-cli decisions questions <project> [--all] [--kind track|blip|overlap|same|whose] [--limit N]
+//!                            [--strips DIR [--allow-faces]]
 //! mm-cli decisions answer <project> <question id> "<choice>"
 //! mm-cli decisions clear <project> <question id>
 //! ```
@@ -17,8 +18,10 @@
 //! the project open (it holds PROJECT/.server.lock) the folder is that server's: answer through it instead
 //! (decisions_cli.py), or close it.
 //!
-//! No pictures: questions give the numbers the scan knows (frames, sizes, scores, box positions), never frames or
-//! crops.
+//! Questions give the numbers the scan knows (frames, sizes, scores, box positions). With `--strips DIR` each also gets
+//! a picture, DIR/<id>.png, for a program that can see: the question's crops and its whole frame, boxes outlined
+//! (strips.rs). Those show people's faces to whatever reads them, so they are made only for a public-domain clip
+//! (jazz), or with `--allow-faces`: the footage's owner chose to send them (AGENTS.md, Privacy).
 //!
 //! Questions come in the Decisions page's order: is it a face first (tracks, overlaps, blips), then who's who.
 //! Answering one can settle or open others (the same-person questions are re-picked), so read the list again after
@@ -80,7 +83,7 @@ pub fn main(args: &[String]) -> ! {
 }
 
 fn usage() -> Fail {
-    Fail("usage: mm-cli decisions (projects | questions <project> [--all] [--kind K] [--limit N] | answer <project> <id> <choice> | clear <project> <id>)".into())
+    Fail("usage: mm-cli decisions (projects | questions <project> [--all] [--kind K] [--limit N] [--strips DIR [--allow-faces]] | answer <project> <id> <choice> | clear <project> <id>)".into())
 }
 
 fn checkout_root() -> Option<PathBuf> {
@@ -218,6 +221,7 @@ fn run(args: &[String]) -> std::result::Result<(), Fail> {
         }
         "questions" => {
             let (mut all, mut kind, mut limit, mut pos) = (false, None::<String>, None::<i64>, vec![]);
+            let (mut strips_dir, mut allow_faces) = (None::<PathBuf>, false);
             let mut i = 0;
             while i < rest.len() {
                 match rest[i].as_str() {
@@ -230,6 +234,11 @@ fn run(args: &[String]) -> std::result::Result<(), Fail> {
                         }
                         kind = Some(k.clone());
                     }
+                    "--strips" => {
+                        i += 1;
+                        strips_dir = Some(PathBuf::from(rest.get(i).ok_or_else(usage)?));
+                    }
+                    "--allow-faces" => allow_faces = true,
                     "--limit" => {
                         i += 1;
                         limit = Some(rest.get(i).and_then(|s| s.parse().ok()).ok_or_else(usage)?);
@@ -252,7 +261,22 @@ fn run(args: &[String]) -> std::result::Result<(), Fail> {
                 let n = ds.len() as i64;
                 ds.truncate((if l < 0 { (n + l).max(0) } else { l.min(n) }) as usize);
             }
-            println!("{}", pydict![("project", name.as_str()), ("open", n_open), ("questions", ds.iter().map(slim).collect::<Vec<_>>())].dumps_indent(1));
+            let mut qs: Vec<Py> = ds.iter().map(slim).collect();
+            if let Some(dir) = &strips_dir {
+                let meta = projects::meta(&proj).map_err(Fail)?;
+                let video = meta.get("video").as_str().unwrap_or("").to_string();
+                let public = checkout_root().is_some_and(|r| mm_core::privacy::is_public_clip(&r, Path::new(&video)));
+                if !public && !allow_faces {
+                    return fail("--strips: this clip isn't public domain, so its strips show real people's faces to whatever \
+                                 reads them; pass --allow-faces only if the footage's owner chose to send them");
+                }
+                let w = meta.get("width").as_f64().unwrap_or(0.0);
+                for q in qs.iter_mut() {
+                    let st = crate::strips::write(&proj, w, q, dir).unwrap_or_else(|e| pydict![("error", e)]);
+                    q.as_dict_mut().unwrap().insert("strip", st);
+                }
+            }
+            println!("{}", pydict![("project", name.as_str()), ("open", n_open), ("questions", qs)].dumps_indent(1));
         }
         "answer" | "clear" => {
             let want = if cmd == "answer" { 3 } else { 2 };
