@@ -252,7 +252,11 @@ Rectangle {
                 Layout.bottomMargin: 40
                 spacing: 4
                 Text { text: T.t("legal.line"); font.family: Theme.body; font.pixelSize: 12; color: Theme.faint }
-                Text { text: T.t("legal.link"); font.family: Theme.body; font.pixelSize: 12; color: Theme.soft; font.underline: true }
+                Text {
+                    objectName: "licences"
+                    text: T.t("legal.link"); font.family: Theme.body; font.pixelSize: 12; color: Theme.soft; font.underline: true
+                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: Qt.openUrlExternally(noticesUrl) }
+                }
             }
         }
     }

@@ -11,7 +11,7 @@
   <a href="https://github.com/acgourley/mojimask/releases/latest/download/Mojimask.dmg"><b>Download for macOS</b></a>
   &nbsp;·&nbsp; <a href="docs/media/jazz-walkthrough.mp4">Watch the 45 second demo</a>
   &nbsp;·&nbsp; <a href="https://acgourley.github.io/mojimask/">Website</a>
-  <br><sub>Requires Apple Silicon. Nothing leaves your Mac.</sub>
+  <br><sub>Requires an Apple-silicon Mac with macOS 15 or later. Nothing leaves your Mac.</sub>
 </p>
 
 <p align="center">
@@ -36,16 +36,16 @@ follow and understand each person in the scene.
 
 ## Building it
 
-Needs an Apple-silicon Mac with Python 3.11, [uv](https://docs.astral.sh/uv/), cmake and ninja
-(`brew install cmake ninja`).
+mojimask is a Rust app with a Qt Quick window (in `native/`). Building it needs an Apple-silicon Mac with
+macOS 15, Xcode, [rustup](https://rustup.rs) (it fetches the Rust version in `native/rust-toolchain.toml`) and
+Homebrew's Qt, GStreamer, cmake and ninja:
 
 ```bash
-uv venv .venv --python 3.11
-uv pip install --python .venv/bin/python -r requirements.txt
-./packaging/build_opencv.sh      # a small OpenCV, ~5 min
+brew install qt gstreamer cmake ninja
 # put the model files in models/: see models/README.md
-.venv/bin/python desktop.py      # run it from source
-./packaging/build_mac.sh         # or build it: dist/Mojimask.app and dist/Mojimask.dmg
+native/build.sh                                               # build it
+native/app/build/Mojimask.app/Contents/MacOS/Mojimask --dev   # run it from source
+native/packaging/make_app.sh --dmg                            # or package it: native/dist/Mojimask.app and .dmg
 ```
 
 ## Contributing

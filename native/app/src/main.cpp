@@ -163,6 +163,9 @@ int main(int argc, char **argv) {
     const QString web = QDir(root + "/native/web").exists() ? root + "/native/web" : root + "/web";
     engine.rootContext()->setContextProperty("fontsDir", QUrl::fromLocalFile(web + "/fonts/"));
     engine.rootContext()->setContextProperty("webDir", QUrl::fromLocalFile(web + "/"));
+    // the Projects page's "Licences": the notices (the bundle's are made from the build, mm-pack notices; the licence texts
+    // are in licenses/ beside them)
+    engine.rootContext()->setContextProperty("noticesUrl", QUrl::fromLocalFile(root + "/THIRD_PARTY_NOTICES.md"));
     const QString qmlDir = dev ? root + "/native/app/qml" : QString();
     const QUrl mainUrl = dev ? QUrl::fromLocalFile(qmlDir + "/Main.qml") : QUrl("qrc:/qml/Main.qml");
 

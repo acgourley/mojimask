@@ -443,6 +443,12 @@ impl Proj {
             }
             "/api/thumb" => self.thumb(srv, body)?,
             "/api/render" => return Err(Fail(400, "exports are made by the app".into())),
+            "/api/portrait" => {
+                let data = body["data"].as_str().unwrap_or("");
+                let bytes = b64_decode(data.rsplit(',').next().unwrap_or("")).ok_or_else(|| Fail(400, "that file isn't a picture this app can read".into()))?;
+                let name = prepare_portrait(&bytes, &self.work, &srv.cfg.root).map_err(|e| Fail(400, e))?;
+                json!({"file": name})
+            }
             _ => return Err(Fail(404, "not found".into())),
         };
         Ok(Reply::json(&reply))
@@ -609,4 +615,112 @@ pub fn read_brand(web: &Path) -> Option<Value> {
 #[allow(dead_code)]
 fn _unused() -> f64 {
     now()
+}
+
+/// portrait.prepare: a chosen photo (any picture's bytes) -> the project's copy, `<work>/portrait/<name>.png`; returns
+/// the name, which the page then sets as edits.portrait. The photo is expected to be a cut-out already (transparent
+/// around the person) and is used as it is, at most 1600 px on its long side. A PNG keeps its transparency; other
+/// pictures (JPEG, HEIC, ...) are read by macOS's ImageIO, turned upright as their orientation tag says. Refused when
+/// RetinaFace finds no face in it (as Python's portrait._face did); its pose is measured now and cached beside it, so
+/// the first frame drawn with it isn't slow.
+fn prepare_portrait(bytes: &[u8], work: &Path, root: &Path) -> std::result::Result<String, String> {
+    const UNREADABLE: &str = "that file isn't a picture this app can read";
+    let im = match image::load_from_memory_with_format(bytes, image::ImageFormat::Png) {
+        Ok(im) => im.to_rgba8(),
+        Err(_) => {
+            let tmp = std::env::temp_dir().join(format!("mojimask-portrait-{}", std::process::id()));
+            std::fs::write(&tmp, bytes).map_err(|e| e.to_string())?;
+            let r = mm_media::photo::read_image(&tmp.to_string_lossy());
+            let _ = std::fs::remove_file(&tmp);
+            let bgr = r.map_err(|_| UNREADABLE.to_string())?;
+            let mut rgba = image::RgbaImage::new(bgr.w, bgr.h);
+            for (p, c) in rgba.pixels_mut().zip(bgr.data.chunks_exact(3)) {
+                *p = image::Rgba([c[2], c[1], c[0], 255]);
+            }
+            rgba
+        }
+    };
+    let (w, h) = im.dimensions();
+    if w == 0 || h == 0 {
+        return Err(UNREADABLE.into());
+    }
+    let k = (1600.0 / w.max(h) as f64).min(1.0);
+    let im = if k < 1.0 {
+        image::imageops::resize(&im, ((w as f64 * k).round() as u32).max(1), ((h as f64 * k).round() as u32).max(1), image::imageops::FilterType::Lanczos3)
+    } else {
+        im
+    };
+    let mut png = Vec::new();
+    image::DynamicImage::ImageRgba8(im).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).map_err(|e| e.to_string())?;
+    // named by its contents (FNV-1a 64), so choosing the same photo again reuses its file and its measured pose
+    let mut hash: u64 = 0xcbf29ce484222325;
+    for b in &png {
+        hash = (hash ^ *b as u64).wrapping_mul(0x100000001b3);
+    }
+    let name = format!("{:012x}.png", hash & 0xffff_ffff_ffff);
+    let dir = work.join("portrait");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let path = dir.join(&name);
+    std::fs::write(&path, &png).map_err(|e| e.to_string())?;
+    let models = mm_core::paths::models(root);
+    match mm_records::records::measure_pose(&path, &models) {
+        Ok((_, _, true)) => {}
+        _ => {
+            let _ = std::fs::remove_file(&path);
+            return Err("no face found in that photo: try a clearer, front-on headshot".into());
+        }
+    }
+    let key = mm_records::records::key_for(Some(path.to_string_lossy().into_owned()));
+    mm_records::records::own_pose(&key, &mm_core::paths::web(root), Some(&models));
+    Ok(name)
+}
+
+/// Standard base64 (the page's data: URL), None if it isn't.
+fn b64_decode(s: &str) -> Option<Vec<u8>> {
+    let mut out = Vec::with_capacity(s.len() * 3 / 4);
+    let (mut acc, mut bits) = (0u32, 0u32);
+    for c in s.bytes() {
+        let v = match c {
+            b'A'..=b'Z' => c - b'A',
+            b'a'..=b'z' => c - b'a' + 26,
+            b'0'..=b'9' => c - b'0' + 52,
+            b'+' => 62,
+            b'/' => 63,
+            b'=' | b'\n' | b'\r' | b' ' => continue,
+            _ => return None,
+        } as u32;
+        acc = (acc << 6) | v;
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push((acc >> bits) as u8);
+        }
+    }
+    Some(out)
+}
+
+#[cfg(test)]
+mod portrait_tests {
+    use super::*;
+
+    /// The Mona Lisa's head (public domain, shipped) is taken; a blank picture is refused. Needs the models.
+    #[test]
+    fn prepare_portrait_takes_a_face_and_refuses_a_blank() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap();
+        if !mm_core::paths::models(&root).join("onnx").is_dir() {
+            eprintln!("no models: skipped");
+            return;
+        }
+        let work = std::env::temp_dir().join(format!("mm-portrait-test-{}", std::process::id()));
+        std::fs::create_dir_all(&work).unwrap();
+        let mona = std::fs::read(mm_core::paths::web(&root).join("assets/portrait_mona.png")).unwrap();
+        let name = prepare_portrait(&mona, &work, &root).expect("a face");
+        assert!(work.join("portrait").join(&name).is_file());
+        let blank = image::RgbaImage::from_pixel(64, 64, image::Rgba([200, 200, 200, 255]));
+        let mut png = Vec::new();
+        image::DynamicImage::ImageRgba8(blank).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+        assert!(prepare_portrait(&png, &work, &root).unwrap_err().starts_with("no face"));
+        assert_eq!(b64_decode("aGk=").unwrap(), b"hi");
+        let _ = std::fs::remove_dir_all(&work);
+    }
 }

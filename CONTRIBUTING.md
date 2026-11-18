@@ -7,7 +7,7 @@ rules exist to spend it well.
 
 - **Open an issue first** for anything bigger than a small fix: a new feature, a change to the scan's rules, a new
   dependency or model. A short "here's what I want to do and why" saves both of us a wasted pull request.
-- Set up from source as in [AGENTS.md](AGENTS.md#setup). Then turn on the privacy check once per clone:
+- Set up from source as in [AGENTS.md](AGENTS.md#setup-and-building). Then turn on the privacy check once per clone:
 
   ```bash
   git config core.hooksPath .githooks
@@ -27,8 +27,8 @@ The pre-commit hook and CI refuse pictures, videos and scan output (`.githooks/c
 
 - Keep each one to one change, small enough to review in one sitting.
 - Say what changed, why, and how you checked it. Changes to the scan's rules need before and after numbers from
-  the decisions benchmark (`tools/bench/decision_bench.py jazz`, see
-  [AGENTS.md](AGENTS.md#changing-the-scans-rules)), and you should have looked at its picture sheets.
+  the rules' benchmark (`mm-bench`, see [AGENTS.md](AGENTS.md#changing-the-scans-rules)), and you should have
+  looked at the jazz pictures behind any number that moved.
 - Contributions are licensed under the project's licence, AGPL-3.0. You must have the right to submit what you
   send: don't paste code from projects with incompatible licences.
 

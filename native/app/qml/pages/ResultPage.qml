@@ -74,6 +74,11 @@ Rectangle {
                         visible: page.shown && page.ed.video.ready
                         textureWidth: page.ed.video.width
                         textureHeight: page.ed.video.height
+                        // shrunk through mipmaps, as the Editor's (EditorPage.qml)
+                        layer.enabled: page.ed.video.width > 0 && width / page.ed.video.width < 0.75
+                        layer.textureSize: Qt.size(page.ed.video.width, page.ed.video.height)
+                        layer.mipmap: true
+                        layer.smooth: true
                     }
                     // the raw frame (app.html: saturate .75, brightness .8), fading out as the covers come in
                     Image {

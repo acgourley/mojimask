@@ -74,6 +74,11 @@ Rectangle {
                             visible: page.vid.ready && store.state.app.page === "export"
                             textureWidth: page.vid.width
                             textureHeight: page.vid.height
+                            // shrunk through mipmaps, as the Editor's (EditorPage.qml)
+                            layer.enabled: out.s < 0.75
+                            layer.textureSize: Qt.size(page.vid.width, page.vid.height)
+                            layer.mipmap: true
+                            layer.smooth: true
                             width: page.vid.width * out.s
                             height: page.vid.height * out.s
                             anchors.centerIn: parent

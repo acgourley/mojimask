@@ -15,8 +15,6 @@ serde_json.workspace = true
 bytemuck.workspace = true
 half.workspace = true
 image.workspace = true
-# the Python sidecar's HTTP API (plain http on 127.0.0.1: no TLS)
-ureq = { version = "3", default-features = false }
 mm-vision.workspace = true
 mm-analysis.workspace = true
 mm-scan.workspace = true

@@ -105,7 +105,7 @@ dump on `test_clips/jazz.mp4`); otherwise you see the video alone and the status
 | `app/src` | the C++ host: `main.cpp` (start-up, live reload), `store` (bridge), `videoitem` (QQuickRhiItem), `devtools` (hooks), `platform_mac.mm` |
 | `app/qml` | `Main.qml`, `Theme.qml` (web/theme.css's tokens), `components/`, `pages/` |
 | `web/` | what the app shows and draws with: fonts, the words (`strings.json`), icons, the brand, emoji palettes and eyes, the paintings and the default portrait (`mm_core::paths::web`; the bundle's `Resources/web`). The Python app's `web/` links to these until it is retired |
-| `packaging/` | the Mac bundle and disk image (`make_app.sh`, `make_dmg.sh`), the icon and the disk image's picture drawn at build time (`make_icon.swift`, `dmg_background.swift`), licence texts (`licenses/`, `notices.py`) |
+| `packaging/` | the Mac bundle and disk image (`make_app.sh`, `make_dmg.sh`), the icon and the disk image's picture drawn at build time (`make_icon.swift`, `dmg_background.swift`), licence texts (`licenses/`, gathered by `mm-pack notices`) |
 | `tools/mmctl` | the hooks from the command line |
 
 ## How it works, in one paragraph
@@ -207,15 +207,13 @@ native/target/release/mm-ml-parity out/poc/results/ml/ref out/native/ml_parity.j
 
 ## Known gaps
 
-- **Not ported yet:** choosing a new portrait photo (`POST /api/portrait`); the export preview's blurred "fit"
-  background; the People page's "ask" filter; the depth view's face-zone circle.
+- **Not ported yet:** the export preview's blurred "fit" background (the preview shows a dim copy; the exported video
+  has the blur); the People page's "ask" filter; the depth view's face-zone circle.
 - **The scan's motion:** `--motion native` (no Python) asks one extra question on jazz; from a checkout `python` is the
   scan's default, the bundled app uses `native`.
 - **Seeking** an iPhone clip takes about 1.5 s (long GOP), so scrubbing is slow; forward decoding runs at 440 fps.
 - **The lighting estimate** (about 80 s on a 50 s 4K clip) shows no progress, and all records are rebuilt every 2 s
   while it runs.
-- **The video in the Editor** is a 4K texture shrunk into the item without mipmaps (aliasing on detail); it should be
-  drawn at the item's size.
 - **The corner mark** is a few levels off Python's on its letters (max error ~70 on a few pixels), so a marked export is
   ~0.5 dB further from Python's than Python's own H.264 is.
 - **Export** decodes and converts each frame on the CPU and reads the drawn frame back: fine for 1080p, slow-ish for 4K.

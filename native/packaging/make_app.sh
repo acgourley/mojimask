@@ -15,7 +15,7 @@
 #                strings.json, icons.json, brand.json, palettes.json, emoji_eyes.json, the pictures), models/ (desktop.py's
 #                CHECK_MODELS + depth, laid out as in a checkout), test_clips/jazz.mp4, check.sh,
 #                THIRD_PARTY_NOTICES.md + licenses/, LICENSE
-# 3. relocate.py: copies and rewrites so no load command or rpath names /opt/homebrew (it fails otherwise).
+# 3. mm-pack relocate (crates/mm-pack): copies and rewrites so no load command or rpath names /opt/homebrew (it fails otherwise).
 # 4. Signs inside-out: ad hoc, or with MOJIMASK_SIGN_ID (a "Developer ID Application" identity) for distribution.
 #    With --dmg and MOJIMASK_NOTARY_PROFILE (an `xcrun notarytool store-credentials` profile), make_dmg.sh also signs,
 #    notarizes and staples the disk image.
@@ -64,6 +64,9 @@ else
     HOST="$NATIVE/target/package/host/$NAME.app"
 fi
 CLI="$NATIVE/target/release/mm-cli"
+# the packaging steps below (relocate, ICU trim, notices, sizes): crates/mm-pack
+cargo build -q --release -p mm-pack --manifest-path "$NATIVE/Cargo.toml"
+PACK="$NATIVE/target/release/mm-pack"
 [ -x "$HOST/Contents/MacOS/$NAME" ] && [ -x "$CLI" ] || { echo "no release host or mm-cli: run without --no-build" >&2; exit 1; }
 echo "host: $HOST"
 
@@ -150,13 +153,13 @@ pb "Add :NSHighResolutionCapable bool true"
 [ -f "$R/AppIcon.icns" ] && { pb "Add :CFBundleIconFile string AppIcon"; pb "Set :CFBundleIconFile AppIcon"; }
 
 # -- 3. relocate ------------------------------------------------------------------------------------------------
-python3 "$HERE/relocate.py" "$APP" >"$DIST/relocate.json" || { cat "$DIST/relocate.json"; exit 1; }
+"$PACK" relocate "$APP" >"$DIST/relocate.json" || { cat "$DIST/relocate.json"; exit 1; }
 grep -E '"(machos|copied|ok)"' "$DIST/relocate.json" | tr -d '\n'; echo
 # ICU's data, cut to what Qt uses (34 -> ~10 MB); MM_FULL_ICU=1 keeps Homebrew's
-[ "${MM_FULL_ICU:-0}" = 1 ] || python3 "$HERE/trim_icu.py" "$APP"
+[ "${MM_FULL_ICU:-0}" = 1 ] || "$PACK" trim-icu "$APP"
 
 # licences: crates (cargo metadata), Qt, GStreamer and the other Homebrew libraries, models, fonts
-python3 "$HERE/notices.py" "$APP" "$ROOT" "$NATIVE"
+"$PACK" notices "$APP" "$ROOT" "$NATIVE"
 
 # -- 4. sign (inside-out) -----------------------------------------------------------------------------------------
 # ad hoc by default; MOJIMASK_SIGN_ID="Developer ID Application: ..." signs for distribution: hardened runtime, a secure
@@ -177,7 +180,7 @@ echo "signature ok (${MOJIMASK_SIGN_ID:-ad hoc})"
 
 # -- 5. sizes, then the self-test -------------------------------------------------------------------------------
 echo "bundle $(du -sh "$APP" | cut -f1), built in $(( $(date +%s) - T0 )) s"
-python3 "$HERE/sizes.py" "$APP" | tee "$DIST/sizes.json"
+"$PACK" sizes "$APP" | tee "$DIST/sizes.json"
 if [ $CHECK = 1 ]; then
   "$HERE/run_isolated.sh" "$APP/Contents/MacOS/$NAME" --check | tee "$DIST/check.json"
   tail -n 1 "$DIST/check.json" | grep -q '"ok": true}' || { echo "--check failed" >&2; exit 1; }

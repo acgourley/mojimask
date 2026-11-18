@@ -198,6 +198,12 @@ Rectangle {
                     clip: true
                     textureWidth: page.vid.width
                     textureHeight: page.vid.height
+                    // drawn at the video's own size; shown through a mipmapped layer that size, so a 4K frame shrinks
+                    // into the window smoothly (QQuickRhiItem has no mipmaps of its own; without them detail shimmers)
+                    layer.enabled: k < 0.75
+                    layer.textureSize: Qt.size(page.vid.width, page.vid.height)
+                    layer.mipmap: true
+                    layer.smooth: true
                     // aspect fit, at most 2.5x (review.html layout)
                     readonly property real k: page.vid.width > 0 ? Math.min((stage.width - 16) / page.vid.width, (stage.height - 16) / page.vid.height, page.proj ? 2.5 : 100) : 1
                     width: page.vid.width * k
