@@ -409,6 +409,18 @@ pub struct Records {
     light: Arc<OnceLock<std::result::Result<Lighting, String>>>,
     light_started: bool,
     setup: Option<Setup>,
+    /// each frame's draw order and occlusion plan, by what they're made of (see [`Records::planned`]): kept across
+    /// setups, so a style change or an edit elsewhere doesn't plan every frame again
+    plans: std::sync::Mutex<HashMap<usize, Planned>>,
+}
+
+/// A frame's draw order (the shown pieces left out) and occlusion plan, and the hash of what they were made from.
+#[derive(Clone)]
+struct Planned {
+    key: u64,
+    items: Vec<Item>,
+    near: Option<Arc<DP::Map64>>,
+    occ: BTreeMap<usize, DP::Cut>,
 }
 
 fn stamp(p: &Path) -> Option<(std::time::SystemTime, u64)> {
@@ -445,7 +457,7 @@ impl Records {
             edits_stamp: stamp0,
             light: Arc::new(OnceLock::new()),
             light_started: false,
-            setup: None,
+            setup: None, plans: Default::default(),
         };
         if r.opts.light_now {
             r.start_light();
@@ -653,8 +665,22 @@ impl Records {
         Some(mm_vision::jpeg::encode_bgr(&m.data, m.cols, m.rows, 85))
     }
 
-    fn build(&self, t: usize) -> Result<(Py, Option<Near>)> {
+    /// Frame t's draw order and occlusion plan. They depend only on the frame's boxes, the pieces shown, the scale
+    /// and the depth (fixed for a project), never on the style: so they're kept by a hash of those, across setups.
+    /// (Until 2026-11-18 every setup planned every frame again: a style change on a 4K party clip, 1491 frames,
+    /// took 22-54 s in a debug build, ~70% of it planning.)
+    fn planned(&self, t: usize) -> Planned {
+        use std::hash::{Hash, Hasher};
         let s = self.setup.as_ref().unwrap();
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        for x in &s.pf[t] {
+            (&x.tid, &x.piece, x.kind, x.c.map(f64::to_bits), s.shown.contains(&x.piece)).hash(&mut h);
+        }
+        (s.scale.to_bits(), self.proj.h, self.proj.w, self.occl.is_some()).hash(&mut h);
+        let key = h.finish();
+        if let Some(p) = self.plans.lock().unwrap().get(&t).filter(|p| p.key == key) {
+            return p.clone();
+        }
         let occl = self.occl.as_ref();
         let ti = t as i64;
         let near_of = |x: &Item| occl.unwrap().nearness(ti, &x.piece, &x.c);
@@ -667,6 +693,15 @@ impl Records {
             }
             None => (None, BTreeMap::new()),
         };
+        let p = Planned { key, items, near, occ };
+        self.plans.lock().unwrap().insert(t, p.clone());
+        p
+    }
+
+    fn build(&self, t: usize) -> Result<(Py, Option<Near>)> {
+        let s = self.setup.as_ref().unwrap();
+        let ti = t as i64;
+        let Planned { items, near, occ, .. } = self.planned(t);
         let lighting = if s.light.is_some() { self.light.get().and_then(|r| r.as_ref().ok()) } else { None };
         let mut covers = vec![];
         let mut photos = Dict::new();

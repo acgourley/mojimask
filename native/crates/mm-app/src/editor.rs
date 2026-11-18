@@ -628,6 +628,15 @@ fn work(sh: &Arc<Shared>, what: &'static str, f: impl FnOnce(&Arc<Shared>) -> Re
     });
 }
 
+/// The style asked for last and not yet sent (editor_style).
+static PENDING_STYLE: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+/// The project's cover style as the server last said.
+fn doc_style(sh: &Shared) -> String {
+    let l = sh.lib.lock().unwrap();
+    l.doc["edits"]["cover_style"].as_str().unwrap_or("emoji").to_string()
+}
+
 fn cur_t(sh: &Shared) -> usize {
     let st = sh.st.lock().unwrap();
     if st.editor.shown >= 0 { st.editor.shown as usize } else { st.editor.t }
@@ -678,7 +687,16 @@ pub fn dispatch(sh: &Arc<Shared>, cmd: &str, a: &Value) -> Result<Value> {
             if !STYLES.contains(&st.as_str()) {
                 bail!("style: {}", STYLES.join(" | "));
             }
-            work(sh, "style", move |sh| ops(sh, vec![json!({"op": "set", "path": ["cover_style"], "value": st})], "style"));
+            // clicks made while a change is still being drawn collapse into the last one (each used to wait its turn:
+            // five quick clicks took five redraws, and the picker seemed not to answer)
+            *PENDING_STYLE.lock().unwrap() = Some(st);
+            work(sh, "style", move |sh| {
+                let next = PENDING_STYLE.lock().unwrap().take(); // (not held while the change is drawn)
+                match next {
+                    Some(st) if doc_style(sh) != st => ops(sh, vec![json!({"op": "set", "path": ["cover_style"], "value": st})], "style"),
+                    _ => Ok(()),
+                }
+            });
             Ok(json!("queued"))
         }
         "editor_toggle" => {

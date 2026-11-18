@@ -11,7 +11,7 @@
   "unit.gb": "{n} GB",
   "unit.mb": "{n} MB",
   "unit.kb": "{n} KB",
-  "style.emoji": "{app}",
+  "style.emoji": "Emoji",
   "style.emoji.hint": "Fun, one emoji per person",
   "style.blur": "Blur",
   "style.blur.hint": "Soft and neutral",

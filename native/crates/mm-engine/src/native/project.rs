@@ -514,13 +514,18 @@ impl Proj {
         let mut near = Vec::with_capacity(self.n);
         let mut photos = HashMap::new();
         for t in 0..self.n {
-            let (p, nr) = r.record(t, ask)?;
+            let (mut p, nr) = r.record(t, ask)?;
             if let Some(d) = p.get("photos").as_dict() {
                 for (k, v) in d.iter() {
                     photos.insert(k.to_string(), v.py_str());
                 }
             }
-            frs.push(serde_json::from_value(p.to_serde())?);
+            // the near map comes as `nr` (floats): its base64 copy, for the HTTP records, isn't a FrameRecord field,
+            // and writing it out to parse it back was ~70% of a style change on a 4K party clip
+            if let Some(d) = p.as_dict_mut() {
+                d.remove("near");
+            }
+            frs.push(serde_json::from_str(&p.dumps())?);
             near.push(nr);
         }
         let v = r.records(0, 0, ask)?.to_serde();
