@@ -48,7 +48,7 @@ native/app/build/Mojimask.app/Contents/MacOS/Mojimask --dev --video test_clips/j
 **Where files are** (`mm_core::paths`): the read-only root (`web/`, `models/`, `test_clips/`: the checkout, or the
 bundle's `Contents/Resources`; `MM_ROOT`, `MOJIMASK_MODELS`) and the data folder (`state.json`, projects: `out/native/`
 in a checkout, `~/Library/Application Support/Mojimask` bundled; CoreML's compiles in
-`~/Library/Caches/org.mojimask.native/coreml`). Inside a bundle the host sets GStreamer's and GIO's environment itself
+`~/Library/Caches/org.mojimask.app/coreml`). Inside a bundle the host sets GStreamer's and GIO's environment itself
 (main.cpp `bundleEnv`). No build-machine path is compiled into a release binary (the main checkout's models and venv
 are a debug-build fallback only).
 
@@ -129,8 +129,8 @@ C++. Commands are listed by `mmctl call help`.
 
 ## Checking a change: mmctl
 
-`native/tools/mmctl` (Python 3, no dependencies) talks to the running app through its hooks. Every command prints
-JSON; it exits 1 when the app says no. `mmctl help` lists everything.
+`native/tools/mmctl` (Rust, `crates/mm-ctl`, built by the script when needed) talks to the running app through its
+hooks. Every command prints JSON; it exits 1 when the app says no. `mmctl help` lists everything.
 
 ```bash
 M=native/tools/mmctl

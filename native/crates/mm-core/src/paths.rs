@@ -6,7 +6,7 @@
 //! - **the data folder**: what the app writes: the projects, the store's `state.json`, its caches. From a checkout:
 //!   `out/native/` (projects in `out/native/projects`); bundled: `~/Library/Application Support/Mojimask` (projects in
 //!   its `Projects/`, the Python app's folder: the same project format), CoreML's compiles in
-//!   `~/Library/Caches/org.mojimask.native/coreml`.
+//!   `~/Library/Caches/org.mojimask.app/coreml`.
 //!
 //! Nothing here names the build machine in a release build: the developer's fallbacks (the main checkout's models and
 //! venv, for a worktree that has none) exist only in debug builds.
@@ -76,13 +76,13 @@ pub fn projects(root: &Path) -> PathBuf {
     data_dir(root).join(if bundled(root) { "Projects" } else { "projects" })
 }
 
-/// The caches (CoreML's compiles go in its coreml/): MOJIMASK_CACHE, else ~/Library/Caches/org.mojimask.native
+/// The caches (CoreML's compiles go in its coreml/): MOJIMASK_CACHE, else ~/Library/Caches/org.mojimask.app
 /// bundled, out/native/cache in a checkout.
 pub fn cache_dir(root: &Path) -> PathBuf {
     if let Some(p) = std::env::var_os("MOJIMASK_CACHE") {
         return PathBuf::from(p);
     }
-    if bundled(root) { home().join("Library/Caches/org.mojimask.native") } else { root.join("out/native/cache") }
+    if bundled(root) { home().join("Library/Caches/org.mojimask.app") } else { root.join("out/native/cache") }
 }
 
 /// The models folder: MOJIMASK_MODELS, else the root's models/ (debug builds: else the main checkout's).

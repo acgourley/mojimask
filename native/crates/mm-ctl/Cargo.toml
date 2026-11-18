@@ -1,0 +1,12 @@
+[package]
+name = "mm-ctl"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "mmctl"
+path = "src/main.rs"
+
+# std only: its JSON and HTTP are its own (src/main.rs says why)
+[dependencies]

@@ -9,7 +9,6 @@
 //   --projects the projects folder the Python engine (the sidecar) uses (default out/native/projects)
 //   --python   the Python that runs it (default: the project's venv)
 //   --no-sidecar  don't start an engine (the Editor alone, on a PoC dump)
-//   --engine   native (the Rust engine in this process; the default) or python (app_server.py as a sidecar)
 //   --motion   the native engine's scan motion: python (cv2 through the project's Python; the default for now) or native
 //   --check [DIR]  the self-test: the native engine scans test_clips/jazz.mp4 into DIR (default: a temporary folder,
 //              removed), the store exports it with its covers; prints one JSON line ending "ok": true (exit 0) or false
@@ -85,7 +84,7 @@ static void bundleEnv() {
     both("GST_PLUGIN_PATH", "");
     both("GST_PLUGIN_SCANNER", macos + "/gst-plugin-scanner");
     setDefault("GIO_MODULE_DIR", contents + "/Frameworks/gio-modules");
-    const QString caches = QDir::homePath() + "/Library/Caches/org.mojimask.native";
+    const QString caches = QDir::homePath() + "/Library/Caches/org.mojimask.app";
     QDir().mkpath(caches);
     both("GST_REGISTRY", caches + "/gst-registry.bin");
     setDefault("MM_ROOT", contents + "/Resources");
@@ -148,7 +147,7 @@ int main(int argc, char **argv) {
     const bool restore = flag("--restore") && QFileInfo::exists(stateFile);
     Store store(QJsonObject{{"root", root}, {"state_file", stateFile}, {"restore", restore}, {"dev", dev},
                              {"sidecar", !flag("--no-sidecar")}, {"projects", opt("--projects")}, {"python", opt("--python")},
-                             {"engine", opt("--engine")}, {"motion", opt("--motion")}});
+                             {"motion", opt("--motion")}});
     Store::log(1, "host", QStringLiteral("store from %1, root %2%3").arg(mmApi().path, root, restore ? ", restored" : ""));
     if (!restore && !opt("--video").isEmpty()) {
         QJsonObject r = store.callJson("open", QJsonObject{{"video", opt("--video")}, {"data", opt("--data")}});

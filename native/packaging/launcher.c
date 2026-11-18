@@ -8,7 +8,7 @@
 // Environment (each one only when not already set, so a developer can override it):
 // - GStreamer: GST_PLUGIN_SYSTEM_PATH(_1_0) = Contents/PlugIns/gstreamer (only the bundled plugins, never
 //   Homebrew's compiled-in /opt/homebrew/lib/gstreamer-1.0), GST_PLUGIN_PATH(_1_0) = "" , GST_PLUGIN_SCANNER(_1_0) =
-//   Contents/MacOS/gst-plugin-scanner, GST_REGISTRY(_1_0) = ~/Library/Caches/org.mojimask.native/gst-registry.bin
+//   Contents/MacOS/gst-plugin-scanner, GST_REGISTRY(_1_0) = ~/Library/Caches/org.mojimask.app/gst-registry.bin
 //   (a cache, rebuilt when a plugin file changes), GIO_MODULE_DIR = Contents/Frameworks/gio-modules (none: glib must not load Homebrew's).
 // - The app: MM_ROOT = Contents/Resources (web/, models/, test_clips/ as in a checkout), MOJIMASK_MODELS =
 //   Contents/Resources/models.
@@ -53,7 +53,7 @@ int main(int argc, char **argv) {
     const char *home = getenv("HOME");
     if (home && !getenv("GST_REGISTRY")) {
         char dir[PATH_MAX];
-        snprintf(dir, sizeof dir, "%s/Library/Caches/org.mojimask.native", home);
+        snprintf(dir, sizeof dir, "%s/Library/Caches/org.mojimask.app", home);
         mkdir(dir, 0755);
         both("GST_REGISTRY", PATHF("%s/gst-registry.bin", dir));
     }

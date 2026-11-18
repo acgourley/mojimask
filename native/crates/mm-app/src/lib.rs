@@ -51,8 +51,6 @@ pub struct Config {
     pub projects: String,
     /// the Python that runs it (the project's venv)
     pub python: String,
-    /// the engine: "native" (the Rust engine in this process; the default) or "python" (app_server.py as a sidecar)
-    pub engine: String,
     /// the native engine's scan motion: "python" (cv2 through the project's Python; the default for now) or "native"
     pub motion: String,
 }

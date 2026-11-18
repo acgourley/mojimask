@@ -26,7 +26,7 @@ file(GLOB_RECURSE MM_QML RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} CONFIGURE_DEPENDS 
 qt_add_resources(Mojimask "qml" PREFIX "/" FILES ${MM_QML})
 
 set_target_properties(Mojimask PROPERTIES
-    MACOSX_BUNDLE_GUI_IDENTIFIER org.mojimask.native
+    MACOSX_BUNDLE_GUI_IDENTIFIER org.mojimask.app
     MACOSX_BUNDLE_BUNDLE_NAME "Mojimask"
     OUTPUT_NAME Mojimask)
 

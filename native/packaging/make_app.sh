@@ -35,7 +35,7 @@ MODELS_SRC="${MOJIMASK_MODELS_SRC:-$ROOT/models}"
 BREW=/opt/homebrew
 QT=$BREW/share/qt
 NAME=Mojimask
-VERSION=0.2.0
+VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' "$NATIVE/Cargo.toml" | head -1)"   # the workspace's version
 DIST="$NATIVE/dist"
 APP="$DIST/$NAME.app"
 C="$APP/Contents"

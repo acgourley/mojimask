@@ -1,9 +1,9 @@
-//! Projects, scans, and the open project's Decisions and People, over the Python engine (mm_engine::sidecar), as
-//! `web/app.html` drives them: the library (`/api/projects`), import (`/api/import_path`), the scan's progress
+//! Projects, scans, and the open project's Decisions and People, over the engine (mm_engine::native, through
+//! mm_engine::backend's routes, the ones the Python app's pages called): the library (`/api/projects`), import (`/api/import_path`), the scan's progress
 //! (`/api/status/<id>`, polled) and its "Deciding who's who" events (`/api/projects/<id>/decide_viz`), then the
 //! project's own server through the `/p/<id>/` proxy (`api/init`, `api/decisions`, `api/facts`, `api/undo`).
 //!
-//! Everything that talks to the sidecar runs on one worker thread, in order (an answer, then the next key): commands
+//! Everything that talks to the engine runs on one worker thread, in order (an answer, then the next key): commands
 //! queue work ([`queue`]) and return at once; the state changes when the replies arrive. The scan is polled by a
 //! thread of its own.
 use crate::decide::{self, KeyAction};
@@ -12,7 +12,6 @@ use crate::text::{v, Text};
 use crate::{log, Shared};
 use anyhow::{anyhow, bail, Result};
 use mm_engine::backend::Backend;
-use mm_engine::sidecar::{Options, Sidecar};
 use serde::Serialize;
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashMap};
@@ -213,28 +212,9 @@ pub fn sidecar(sh: &Shared) -> Result<Arc<dyn Backend>> {
     sh.lib.lock().unwrap().sc.clone().ok_or_else(|| anyhow!("the engine isn't running yet"))
 }
 
-/// The engine: the Rust one in this process (`--engine native`, the default) or the Python sidecar (`--engine python`).
+/// The engine: the Rust one in this process (mm_engine::native).
 fn start_sidecar(sh: &Arc<Shared>) -> Result<()> {
-    if sh.cfg.engine != "python" {
-        return start_native(sh);
-    }
-    let root = sh.cfg.root.clone();
-    let projects = if sh.cfg.projects.is_empty() { mm_core::paths::projects(Path::new(&root)).to_string_lossy().into_owned() } else { sh.cfg.projects.clone() };
-    let python = if sh.cfg.python.is_empty() { mm_core::paths::python(Path::new(&root)) } else { sh.cfg.python.clone() };
-    let o = Options {
-        python,
-        root: root.clone(),
-        projects,
-        dev: sh.dev(),
-        ports: (9300, 9400),
-        log: mm_core::paths::data_dir(Path::new(&root)).join("sidecar.log").to_string_lossy().into_owned(),
-        env: std::env::vars().filter(|(k, _)| k == "MOJIMASK_DEPTH").collect(),
-    };
-    let t0 = Instant::now();
-    let sc = Arc::new(Sidecar::start(&o)?);
-    log::info(&format!("sidecar: app_server on {} (pid {}, {:.1} s; projects {}; log {})", sc.port, sc.pid(), t0.elapsed().as_secs_f64(), o.projects, o.log));
-    sh.lib.lock().unwrap().sc = Some(sc);
-    ready_library(sh)
+    start_native(sh)
 }
 
 /// The scan's motion setting (`--motion native|python`; python for now: native motion asks one extra question on

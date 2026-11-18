@@ -1,1 +1,0 @@
-playwright==1.65.2  # the screen catalog (tools/catalog/run.py); then: .venv/bin/python -m playwright install webkit

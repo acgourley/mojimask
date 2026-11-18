@@ -8,7 +8,6 @@
 //!   checks of that evidence against a recording. Command line: `mm-cli scan VIDEO PROJECT` and
 //!   `mm-scan-tool scan|detect|decide|depth ...` (src/bin/mm-scan-tool.rs). Parity: native/tools/parity/detect_*.py,
 //!   engine2_*.py.
-//! - The Python backend ([`sidecar`]): today's engine as a sidecar process, for everything not ported yet.
 //! - The stand-in for a scanned project: the PoC dump (`out/poc/data/<clip>`, written by
 //!   native/tools/dump_reference.py from today's Python engine) with the user's edits on top ([`dump`], [`project`]),
 //!   and progress reporting for long jobs ([`jobs`]).
@@ -24,6 +23,5 @@ pub mod native;
 pub use mm_vision::jpeg;
 pub mod project;
 pub mod scan;
-pub mod sidecar;
 
 pub use project::Project;
