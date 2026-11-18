@@ -65,7 +65,7 @@ QtObject {
     // room for the window's traffic lights (the bar is the title bar)
     readonly property int trafficLights: 78
 
-    // the wordmark (native/web/brand.js)
+    // the wordmark (native/web/brand.json)
     readonly property string brandName: "mojimask"
     readonly property int brandSplit: 4
     readonly property color brandFirst: "#FFFFFF"

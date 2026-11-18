@@ -82,7 +82,7 @@ pub struct Shared {
     pub lib: Mutex<library::Lib>,
     /// work for the library's thread, in order
     pub work: Mutex<mpsc::Sender<library::Job>>,
-    /// native/web/strings.js, icons.js, brand.js
+    /// native/web/strings.json, icons.json, brand.json
     pub text: Arc<text::Text>,
     /// the open project's draw records (records.rs): what the Editor draws
     pub recs: Mutex<Option<Arc<records::Recs>>>,
@@ -121,7 +121,7 @@ impl App {
         let (tx, rx) = mpsc::channel();
         let (wtx, wrx) = mpsc::channel();
         let text = text::Text::load(std::path::Path::new(&cfg.root)).unwrap_or_else(|e| {
-            log::warn(&format!("native/web/strings.js: {e:#}"));
+            log::warn(&format!("native/web/strings.json: {e:#}"));
             text::Text::default()
         });
         let cfg_dev = cfg.dev;

@@ -1,0 +1,9 @@
+{
+  "name": "mojimask",
+  "split": 4,
+  "font": "Nunito",
+  "weight": 900,
+  "tracking": -0.01,
+  "first": "#FFFFFF",
+  "second": "#FFD23F"
+}

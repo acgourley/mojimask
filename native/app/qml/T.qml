@@ -1,6 +1,6 @@
-// The words, icons and name the pages show: native/web/strings.js, icons.js and brand.js, as the store read them
-// (store.call("ui_text")). T.t("scan.left", {eta: "3 min"}) is strings.js's t(): {placeholders} from vars ({app} is the
-// name), a plural ({one, other}) picked by vars.n. T.icon("play", color, size) is icons.js's Icon() as an SVG data URL.
+// The words, icons and name the pages show: native/web/strings.json, icons.json and brand.json, as the store read them
+// (store.call("ui_text")). T.t("scan.left", {eta: "3 min"}) is strings.json's t(): {placeholders} from vars ({app} is the
+// name), a plural ({one, other}) picked by vars.n. T.icon("play", color, size) is icons.json's Icon() as an SVG data URL.
 pragma Singleton
 import QtQuick
 

@@ -1,27 +1,4 @@
-// Every English word the app's pages show, in one place, so the app can be translated (app.html and the pages in its
-// frames: review.html, people.html, decisions.html, and the scripts they load). Loaded before every page's own scripts.
-//
-//   t("export.choose_where")                 -> "Choose where to save it…"
-//   t("scan.left", { eta: "3 min" })         -> "about 3 min left"         ({name} placeholders, filled from vars)
-//   t("projects.freed_many", { n: 2, ... })  -> the "other" form          (plurals: { one, other }, picked by vars.n)
-//
-// Static text in a page's markup carries its key instead of the text, filled by i18n() when the page's script starts:
-//   <h2 data-i18n="start.drop_title"></h2>             text
-//   <p data-i18n-html="export.note_html"></p>          markup (keys ending in _html)
-//   data-i18n-title / -aria-label / -placeholder / -alt  that attribute
-//
-// For translators: add another table beside STRINGS.en (STRINGS.fr = {...}, same keys) and set LANG; a key missing
-// there falls back to English. Keep {placeholders} as they are ({app} is the app's name, from brand.js). Some strings
-// carry HTML (<b>, <br>, a <span id>): keep the tags and translate around them. Plurals: give the forms your language
-// needs (Intl.PluralRules: zero, one, two, few, many, other); "other" is the fallback. Key names on keyboard shortcuts (S, R, [, ⌘Z) stay as they are.
-//
-// Not here yet: words the servers send (the scan's errors, the export formats, rule names and answers): they come
-// from the Python side.
-const STRINGS = {};
-let LANG = "en";
-
-STRINGS.en = {
-  // ---- shared
+{
   "common.ok": "OK",
   "common.cancel": "Cancel",
   "common.err.save": "Couldn't save: {error}",
@@ -34,8 +11,6 @@ STRINGS.en = {
   "unit.gb": "{n} GB",
   "unit.mb": "{n} MB",
   "unit.kb": "{n} KB",
-
-  // ---- the cover styles (app.html result and export, review.html panel)
   "style.emoji": "{app}",
   "style.emoji.hint": "Fun, one emoji per person",
   "style.blur": "Blur",
@@ -46,8 +21,6 @@ STRINGS.en = {
   "style.solid.hint": "Most robust",
   "style.portrait": "Portrait",
   "style.portrait.hint": "One headshot on every head",
-
-  // ---- app.html: the bar
   "nav.label": "Steps",
   "nav.projects": "Projects",
   "nav.decisions": "Decisions",
@@ -66,8 +39,6 @@ STRINGS.en = {
   "app.where_mac": "Mac",
   "app.err.engine_answered": "the app's engine answered {status}",
   "app.err.engine_silent": "the app's engine didn't answer",
-
-  // ---- app.html: home (start a project)
   "start.drop_title": "Drop in a video or photo",
   "start.drop_sub": "Analysis is done locally. Nothing leaves this computer.",
   "start.choose": "Choose video or photo…",
@@ -81,26 +52,22 @@ STRINGS.en = {
   "start.err.engine_silent": "the app's engine didn't answer.",
   "start.err.engine_answered": "the engine answered {status}.",
   "start.err.unreadable": "the file couldn't be read.",
-
-  // ---- app.html: the legal line under the projects, and licenses.html
   "legal.line": "{app} is free software under the AGPL-3.0, with no warranty.",
   "legal.link": "Licences",
   "legal.title": "Licences",
   "legal.back": "Back",
   "legal.license": "{app}'s licence (AGPL-3.0)",
-
-  // ---- app.html: the projects list
   "projects.title": "Projects",
   "projects.on_disk": "{size} on disk",
   "projects.show_folder_tip": "Show the projects folder in Finder",
   "projects.hint": "Clearing a cache frees space and never touches your work. Deleting moves a project to the Trash; your original and any exports stay where they are.",
   "projects.clear_stale": {
-    one: "Clear cache of {n} project not opened in {days} days ({size})",
-    other: "Clear cache of {n} projects not opened in {days} days ({size})",
+    "one": "Clear cache of {n} project not opened in {days} days ({size})",
+    "other": "Clear cache of {n} projects not opened in {days} days ({size})"
   },
   "projects.freed_many": {
-    one: "Freed {size} from {n} project. Your work on them is kept.",
-    other: "Freed {size} from {n} projects. Your work on them is kept.",
+    "one": "Freed {size} from {n} project. Your work on them is kept.",
+    "other": "Freed {size} from {n} projects. Your work on them is kept."
   },
   "projects.freed_one": "Freed {size} from “{name}”. Your work on it is kept; it will take a little longer to open next time.",
   "projects.photo": "Photo",
@@ -127,8 +94,6 @@ STRINGS.en = {
   "projects.err.delete": "Couldn't delete “{name}”: {error}",
   "projects.locate.ask": "Where is {name} now? (full path)",
   "projects.locate.ok": "Use this file",
-
-  // ---- app.html: the scan
   "scan.opening": "Opening…",
   "scan.getting_ready": "Getting ready…",
   "scan.preview_alt": "The frame being checked, a box on each face found",
@@ -169,8 +134,6 @@ STRINGS.en = {
   "scan.err.lost": "Lost touch with the scan: {error}. Go back to Projects and open it again.",
   "scan.err.missing_video": "Can't find the video for this project ({path}).",
   "scan.locate": "Locate…",
-
-  // ---- app.html: the result (the finished video first)
   "result.covering": "Covering faces…",
   "result.done": "Done",
   "result.done_alt": "The same moment, faces covered",
@@ -186,16 +149,12 @@ STRINGS.en = {
   "result.refine": "Refine the covers",
   "result.refine_sub": "Check who's who, uncertain spots and boxes that may not be faces",
   "result.refine_sub_questions": {
-    one: "{n} quick question about boxes we weren't sure were faces, then fine-tune",
-    other: "{n} quick questions about boxes we weren't sure were faces, then fine-tune",
+    "one": "{n} quick question about boxes we weren't sure were faces, then fine-tune",
+    "other": "{n} quick questions about boxes we weren't sure were faces, then fine-tune"
   },
   "result.refine_sub_none": "Fine-tune covers, emoji and who's shown",
-
-  // ---- app.html: the preview player
   "player.alt": "Preview of the exported video",
   "player.position": "Position in the video",
-
-  // ---- app.html: export
   "export.title": "Export",
   "export.format": "Format",
   "export.fit_fill": "Crop to fill",
@@ -216,12 +175,12 @@ STRINGS.en = {
   "export.out_video": "H.264 video + AAC audio (.mp4)",
   "export.too_long": "longer than 3 minutes: some apps will ask you to trim",
   "export.strict_open": {
-    one: "Higher-risk mode: {n} question is still open. Before exporting, answer each one in Decisions.",
-    other: "Higher-risk mode: {n} questions are still open. Before exporting, answer each one in Decisions.",
+    "one": "Higher-risk mode: {n} question is still open. Before exporting, answer each one in Decisions.",
+    "other": "Higher-risk mode: {n} questions are still open. Before exporting, answer each one in Decisions."
   },
   "export.strict_block": {
-    one: "Higher-risk mode: answer the {n} place the computer wasn't sure about in Decisions first.",
-    other: "Higher-risk mode: answer the {n} places the computer wasn't sure about in Decisions first.",
+    "one": "Higher-risk mode: answer the {n} place the computer wasn't sure about in Decisions first.",
+    "other": "Higher-risk mode: answer the {n} places the computer wasn't sure about in Decisions first."
   },
   "export.file_name": "{name}_{app_file}{format}.{ext}",
   "export.file_name_default": "video",
@@ -232,8 +191,6 @@ STRINGS.en = {
   "export.download_video": "Download video",
   "export.download_photo": "Download photo",
   "export.err.failed": "Export failed: {error}",
-
-  // ---- review.html: the editor (the app's Edit step)
   "common.err.server_answered": "the project's server answered {status}",
   "edit.err.reverted": "The editor now shows what was last saved.",
   "edit.err.split": "Couldn't split {piece}: {error}",
@@ -279,12 +236,10 @@ STRINGS.en = {
   "edit.keys.deselect": "deselect",
   "edit.keys.undo": "undo",
   "edit.keys.redo": "redo",
-  // the labels drawn on the picture beside a box
   "edit.box.shown": "{piece} shown",
   "edit.box.held": "held",
   "edit.box.not_face": "not a face",
   "edit.box.not_real": "(not real)",
-  // under the picture: which picture this is, and how many covers
   "edit.pic.no_covers": "no covers (V)",
   "edit.pic.quick": "quick preview (export frame loading)",
   "edit.pic.export": "export frame",
@@ -292,7 +247,6 @@ STRINGS.en = {
   "edit.frame_info": "Frame {frame} / {last} · {s} s",
   "edit.count_emoji": "{n} emoji",
   "edit.count_covers": "{n} covers",
-  // the panel: the selected box
   "edit.person": "Person {n}",
   "edit.unnamed": "Unnamed ({id})",
   "edit.sel.none": "Click an emoji to select its track.",
@@ -305,7 +259,7 @@ STRINGS.en = {
   "edit.sel.not_real": "Not a real person",
   "edit.sel.not_face_tip": "Hair, a hand, a stomach, a pattern: no emoji on this box (it stays {who}'s, dashed here)",
   "edit.sel.del_flips": "Del flips it",
-  "edit.sel.no_emoji": "No emoji on this box{why}. Drawn dashed in this person's colour.",  // {why}: " (the computer's call: …)" or nothing
+  "edit.sel.no_emoji": "No emoji on this box{why}. Drawn dashed in this person's colour.",
   "edit.sel.computers_call": "(the computer's call: {why})",
   "edit.not_face_why.head": "on someone's head",
   "edit.not_face_why.body": "on someone's body",
@@ -334,7 +288,6 @@ STRINGS.en = {
   "edit.corr.undo": "Undo my correction here K",
   "edit.corr.undo_tip": "K: take back where you set it on this frame; the box follows from your other placements",
   "edit.corr.first_set": "where it was first set",
-  // the panel: the decision records behind the selected box
   "edit.decs.title": "Decisions",
   "edit.decs.stuck_to": "stuck to #{person}",
   "edit.decs.stuck_to_it": "box {piece} stuck to it",
@@ -346,18 +299,13 @@ STRINGS.en = {
   "edit.decs.more": "and {n} more",
   "edit.decs.none": "None recorded for box {piece}.",
   "edit.decs.open": "Open decisions ↗ R",
-  // ---- edits_sync.js
   "sync.err.failed": "save failed ({status})",
-
-  // ---- the editor's plug-ins: pose_ui.js, depth_ui.js (buttons beside Covers / Boxes)
   "edit.toggle_on": "on",
   "edit.toggle_off": "off",
   "edit.pose": "Pose",
   "edit.pose_tip": "B: show the body skeletons the scan found (heads are placed from them)",
   "edit.depth": "Depth",
   "edit.depth_tip": "D: show the depth map and what partial occlusion decided for each face",
-
-  // ---- emoji_set_ui.js: the editor's emoji preset panel (preset names and hints come from palettes.json)
   "emojiset.title": "Preset",
   "emojiset.label": "Emoji preset",
   "emojiset.add_placeholder": "add emoji… (Enter)",
@@ -368,12 +316,10 @@ STRINGS.en = {
   "emojiset.custom_hint": "Your own mix",
   "emojiset.drop_tip": "Drop from Custom",
   "emojiset.overrides": {
-    one: "{n} person has a hand-picked emoji (E) in this preset. Other presets keep their own.",
-    other: "{n} people have a hand-picked emoji (E) in this preset. Other presets keep their own.",
+    "one": "{n} person has a hand-picked emoji (E) in this preset. Other presets keep their own.",
+    "other": "{n} people have a hand-picked emoji (E) in this preset. Other presets keep their own."
   },
   "emojiset.clear": "Clear",
-
-  // ---- light_ui.js: the editor's lighting panel
   "light.title": "Lighting",
   "light.enabled": "Match scene lighting",
   "light.light_colour": "Light colour",
@@ -391,7 +337,6 @@ STRINGS.en = {
   "light.estimating": "estimating {pct}%",
   "light.err.failed": "Lighting estimate failed: {error}",
   "light.err.unavailable": "Lighting unavailable: {error}",
-  // the popover on each control: its name, what it does, what the ends mean
   "light.tip.enabled.title": "Match scene lighting",
   "light.tip.enabled.what": "Lights each emoji like the faces around it: shading, brightness and the colour of the light.",
   "light.tip.enabled.ends": "Off: plain emoji, as on a keyboard.",
@@ -428,8 +373,6 @@ STRINGS.en = {
   "light.tip.grain.title": "Grain",
   "light.tip.grain.what": "Adds the footage's own noise to the emoji in the export, so it doesn't look pasted on.",
   "light.tip.grain.ends": "Not shown in this preview.",
-
-  // ---- decide_viz.js: the scan's "Deciding who's who" step, drawn
   "viz.axis_x": "time →",
   "viz.axis_y": "left ← → right of the picture",
   "viz.face.joined": "joined",
@@ -450,16 +393,21 @@ STRINGS.en = {
   "viz.faces.sub": "{faces} faces · {frontal} clear enough to compare",
   "viz.pairs.title": "Comparing the pieces, pair by pair",
   "viz.pairs.sub": "{pairs} pairs · {merges} joined as one person · {refused} kept apart (on screen together) · {asks} unsure",
-  "viz.people.title": { one: "{n} person", other: "{n} people" },
+  "viz.people.title": {
+    "one": "{n} person",
+    "other": "{n} people"
+  },
   "viz.people.fragments": "{n} brief or faceless pieces, covered on their own",
   "viz.people.dropped": "{n} set aside (inside another box, or too weak to be a face)",
   "viz.cover.title": "Filling each cover between and past its detections",
   "viz.cover.sub": "{covers} covers · {filled} frames filled in",
-  "viz.same.title": { one: "{n} question for you", other: "{n} questions for you" },
+  "viz.same.title": {
+    "one": "{n} question for you",
+    "other": "{n} questions for you"
+  },
   "viz.same.done": "Done",
   "viz.same.sub": "Pairs that may be one person, for you to decide",
   "viz.same.none": "No one to ask about",
-  // ---- people.html: the app's People step
   "people.intro": "Everyone we counted as a person is masked; the white box marks the face we mean. Unmask anyone who's happy to be seen, give them a name, or click their emoji to change it.",
   "people.next": "Next: Edit",
   "people.saved": "Changes save as you go",
@@ -481,13 +429,11 @@ STRINGS.en = {
   "people.unmasked": "{n} unmasked",
   "people.all_masked": "all masked",
   "people.brief": {
-    one: "Also masked: {n} brief stretch, too short or unclear to count as people.",
-    other: "Also masked: {n} brief stretches, too short or unclear to count as people.",
+    "one": "Also masked: {n} brief stretch, too short or unclear to count as people.",
+    "other": "Also masked: {n} brief stretches, too short or unclear to count as people."
   },
   "people.show_brief": "Show them",
   "people.hide_brief": "Hide them",
-
-  // ---- decisions.html: the app's Decisions step
   "decisions.outside": "· this page belongs to the app's Decisions step",
   "decisions.intro": "Every face we find is covered. These are the boxes we weren't sure about. Anything you leave unanswered stays covered.",
   "decisions.next": "Next: People",
@@ -495,7 +441,6 @@ STRINGS.en = {
   "decisions.count": "{open} to answer · {answered} answered",
   "decisions.filter.open": "To answer",
   "decisions.filter.answered": "Answered",
-  // the questions, large
   "decisions.q.whose": "Whose face is this?",
   "decisions.q.same": "Is the green box the same person as the grey one?",
   "decisions.q.overlap": "Is the green box part of the grey box's face?",
@@ -504,7 +449,6 @@ STRINGS.en = {
   "decisions.note.same": "Either box may show any part of their head: face, side, back or hair. It's the same person if it's the same head.",
   "decisions.note.overlap": "Answer for what the green box is on while it plays. Not a face at all only if it never is: a hand, clothes or the background. Not a face uncovers it the whole time.",
   "decisions.note.whose": "Pick the person it is, most alike first (faces, then bodies, then who was nearest). If it's nobody here, Someone new.",
-  // the answer buttons
   "decisions.a.same_person": "Yes, the same person",
   "decisions.a.different_people": "No, different people",
   "decisions.a.same_face": "Yes, part of their face",
@@ -513,13 +457,15 @@ STRINGS.en = {
   "decisions.a.face": "Yes, a face",
   "decisions.a.not_face": "No, not a face",
   "decisions.a.someone_new": "None of these: someone new",
-  // the list: short questions, why each is asked, short answers
   "decisions.short.face": "Is this a face?",
   "decisions.short.overlap": "Part of the grey box's face?",
   "decisions.short.same": "Same person as the grey box?",
   "decisions.why.fragment": "A short stretch, too brief to count as a person, right where they are",
   "decisions.why.same": "Never on screen together; they move, look and dress alike",
-  "decisions.why.blip": { one: "Seen for only one frame", other: "Seen for only {n} frames" },
+  "decisions.why.blip": {
+    "one": "Seen for only one frame",
+    "other": "Seen for only {n} frames"
+  },
   "decisions.why.track": "On screen {s} s, but rarely looks clearly like a face",
   "decisions.why.whose": "A box you made",
   "decisions.why.overlap": "Overlaps someone's covered face",
@@ -541,25 +487,28 @@ STRINGS.en = {
   "decisions.rule_tip_pick": "{rule}. Pick an answer to override it.",
   "decisions.more_not_listed": "{n} more not listed",
   "decisions.keys_hint": "J / K to move · 1 2 3 to answer",
-  // only the decisions about one box (the editor's R)
   "decisions.piece.mine_html": {
-    one: "<b>The box you selected</b>: {n} question.",
-    other: "<b>The box you selected</b>: {n} questions.",
+    "one": "<b>The box you selected</b>: {n} question.",
+    "other": "<b>The box you selected</b>: {n} questions."
   },
   "decisions.piece.none": "No questions about the box you selected.",
-  "decisions.piece.show_nearby": { one: "Also show {n} about a box beside it", other: "Also show {n} about boxes beside it" },
-  "decisions.piece.hide_nearby": { one: "Hide {n} about a box beside it", other: "Hide {n} about boxes beside it" },
+  "decisions.piece.show_nearby": {
+    "one": "Also show {n} about a box beside it",
+    "other": "Also show {n} about boxes beside it"
+  },
+  "decisions.piece.hide_nearby": {
+    "one": "Hide {n} about a box beside it",
+    "other": "Hide {n} about boxes beside it"
+  },
   "decisions.piece.all": "Show every decision",
   "decisions.piece.split_hint": "To change it for only part of the clip, split it in Edit (S) where it changes, then answer for that part.",
   "decisions.other_note_html": "Here the box you selected is the <b>grey</b> one. This answer changes the <b>green</b> box, not yours.",
-  // nothing to show
   "decisions.empty.missing_title": "No decisions yet",
   "decisions.empty.missing": "This project needs a rescan: open its video again as a new project.",
   "decisions.empty.done_title": "Nothing left to answer",
   "decisions.empty.done": "Every face we found is covered.",
   "decisions.empty.none_title": "None",
   "decisions.empty.none": "No decisions match these filters.",
-  // the pictures
   "decisions.pic.green": "The green box",
   "decisions.pic.grey": "The grey box",
   "decisions.pic.boxes": "The boxes",
@@ -571,25 +520,5 @@ STRINGS.en = {
   "decisions.unnamed": "Unnamed",
   "decisions.why_we_ask": "Why we ask",
   "decisions.agent": "answered by an agent",
-  "decisions.agent_tip": "Given by a program answering for you (decisions_cli.py). Pick another answer to change it.",
-};
-
-// the string for key in the current language (English if it has none), its {placeholders} filled from vars; a plural
-// ({one, other, ...}) is picked by vars.n
-function t(key, vars) {
-  let s = (STRINGS[LANG] || STRINGS.en)[key];
-  if (s === undefined) s = STRINGS.en[key];
-  if (s === undefined) return key;  // (a missing key shows itself, so it's found)
-  if (typeof s === "object") s = s[new Intl.PluralRules(LANG).select(Number(vars && vars.n))] ?? s.other;
-  vars = { app: BRAND.name, app_file: BRAND.name.toLowerCase(), ...vars };  // (the app's name: brand.js)
-  return s.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k]) : m));
-}
-// fills a page's static text from its data-i18n attributes (see the top of this file), and its name and wordmark
-// (data-brand: brand.js)
-function i18n(root = document) {
-  brandFill(root);
-  for (const el of root.querySelectorAll("[data-i18n]")) el.textContent = t(el.dataset.i18n);
-  for (const el of root.querySelectorAll("[data-i18n-html]")) el.innerHTML = t(el.dataset.i18nHtml);
-  for (const attr of ["title", "aria-label", "placeholder", "alt"])
-    for (const el of root.querySelectorAll(`[data-i18n-${attr}]`)) el.setAttribute(attr, t(el.getAttribute(`data-i18n-${attr}`)));
+  "decisions.agent_tip": "Given by a program answering for you (decisions_cli.py). Pick another answer to change it."
 }

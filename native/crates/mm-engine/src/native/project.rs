@@ -601,13 +601,9 @@ impl Proj {
     }
 }
 
-/// about.BRAND: the object in native/web/brand.js.
+/// about.BRAND: the object in native/web/brand.json.
 pub fn read_brand(web: &Path) -> Option<Value> {
-    let src = std::fs::read_to_string(web.join("brand.js")).ok()?;
-    let at = src.find("const BRAND")?;
-    let open = at + src[at..].find('{')?;
-    let mut de = serde_json::Deserializer::from_str(&src[open..]).into_iter::<Value>();
-    de.next()?.ok()
+    serde_json::from_str(&std::fs::read_to_string(web.join("brand.json")).ok()?).ok()
 }
 
 #[allow(dead_code)]

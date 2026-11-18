@@ -1,4 +1,4 @@
-// An icon from native/web/icons.js (Lucide), drawn in a colour: Icon { name: "play"; color: Theme.dim; size: 16 }.
+// An icon from native/web/icons.json (Lucide), drawn in a colour: Icon { name: "play"; color: Theme.dim; size: 16 }.
 import QtQuick
 import ".."
 

@@ -1,4 +1,4 @@
-// The wordmark (native/web/brand.js): the name in Nunito 900, the first part white, the rest in the accent.
+// The wordmark (native/web/brand.json): the name in Nunito 900, the first part white, the rest in the accent.
 import QtQuick
 import ".."
 

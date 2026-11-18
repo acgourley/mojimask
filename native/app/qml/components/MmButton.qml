@@ -1,6 +1,6 @@
 // A button in theme.css's styles: "plain" (outlined), "primary" (accent), "raised", "icon" (square, borderless),
 // "link", "danger" (dialog_ui.js's red OK). `big` is .big (a bigger, bolder button; outlined ones get the brighter
-// line); `small` is .small; `iconName` puts an icons.js icon before the text; `trailingIcon` after it.
+// line); `small` is .small; `iconName` puts an icons.json icon before the text; `trailingIcon` after it.
 import QtQuick
 import QtQuick.Controls.Basic
 import ".."

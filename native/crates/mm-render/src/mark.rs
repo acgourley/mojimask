@@ -1,6 +1,6 @@
 //! The optional corner mark (Export's "Add a small ... mark"; track.watermark and track._mark_sprite).
 //!
-//! The wordmark as brand.js sets it (about.BRAND: the name's case, typeface, weight, letter-spacing and the two parts'
+//! The wordmark as brand.json sets it (about.BRAND: the name's case, typeface, weight, letter-spacing and the two parts'
 //! colours, as on the splash and in the app's bar), in the lower right of the OUTPUT picture (drawn after the format's
 //! crop, so it's never cut off), a little transparent (MARK_ALPHA 0.85), with a soft shadow so it reads on any footage.
 //! Its height follows the picture's short side: px = max(10, round(short * MARK_SIZE)), MARK_SIZE 0.028; margin
@@ -41,7 +41,7 @@ fn hex(s: &str) -> Result<[u8; 3]> {
 }
 
 impl MarkStyle {
-    /// From a JSON object with "brand" (brand.js's BRAND) and "font_file" (its font file), as draw_ref.py's configs.json.
+    /// From a JSON object with "brand" (brand.json's BRAND) and "font_file" (its font file), as draw_ref.py's configs.json.
     pub fn from_brand(cfg: &serde_json::Value) -> Result<MarkStyle> {
         let b = &cfg["brand"];
         let s = |k: &str| b[k].as_str().ok_or_else(|| anyhow!("brand.{k}"));

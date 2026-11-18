@@ -12,7 +12,7 @@
 #    PlugIns/    Qt: platforms/libqcocoa, imageformats/libqjpeg; gstreamer/: the 8 plugins mm-media uses
 #    Frameworks/ every Homebrew library those load (Qt frameworks without headers, GStreamer, GLib, ICU, ...)
 #    Resources/  qml/ (only the QML modules app/qml imports, Controls with the Basic style only), qt.conf, web/ (fonts,
-#                strings.js, icons.js, brand.js, palettes.json, emoji_eyes.json, the pictures), models/ (desktop.py's
+#                strings.json, icons.json, brand.json, palettes.json, emoji_eyes.json, the pictures), models/ (desktop.py's
 #                CHECK_MODELS + depth, laid out as in a checkout), test_clips/jazz.mp4, check.sh,
 #                THIRD_PARTY_NOTICES.md + licenses/, LICENSE
 # 3. relocate.py: copies and rewrites so no load command or rpath names /opt/homebrew (it fails otherwise).
@@ -86,7 +86,7 @@ chmod 755 "$C/MacOS/"*
 strip -x "$C/MacOS/mojimask-app" "$C/MacOS/mm-cli" 2>/dev/null
 
 # Qt plugins: the Cocoa platform, JPEG (FramedArt's gallery pictures; PNG is built into QtGui) and SVG (Icon.qml's
-# icons are SVG data URLs from native/web/icons.js)
+# icons are SVG data URLs from native/web/icons.json)
 mkdir -p "$C/PlugIns/platforms" "$C/PlugIns/imageformats"
 cp -L "$QT/plugins/platforms/libqcocoa.dylib" "$C/PlugIns/platforms/"
 cp -L "$QT/plugins/imageformats/libqjpeg.dylib" "$QT/plugins/imageformats/libqsvg.dylib" "$C/PlugIns/imageformats/"
@@ -123,7 +123,7 @@ EOF
 W="$R/web"
 mkdir -p "$W/assets"
 cp -R "$NATIVE/web/fonts" "$W/fonts"
-for f in strings.js icons.js brand.js palettes.json emoji_eyes.json; do cp "$NATIVE/web/$f" "$W/"; done
+for f in strings.json icons.json brand.json palettes.json emoji_eyes.json; do cp "$NATIVE/web/$f" "$W/"; done
 cp -R "$NATIVE/web/assets/gallery" "$W/assets/gallery"
 cp "$NATIVE/web/assets/icon_art.jpg" "$NATIVE/web/assets/portrait_mona.png" "$W/assets/"
 mkdir -p "$R/models/onnx" "$R/models/$(dirname $DEPTH_REL)" "$R/test_clips"
