@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Hardened-runtime entitlements for the native app's Developer ID build (make_app.sh with MOJIMASK_SIGN_ID).
+     allow-jit: Qt's QML engine compiles JavaScript to machine code (MAP_JIT). Everything else in the bundle is
+     signed with the same identity, so library validation stays on. -->
+<plist version="1.0">
+<dict>
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+</dict>
+</plist>

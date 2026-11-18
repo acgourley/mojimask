@@ -1,0 +1,16 @@
+[package]
+name = "mm-vision"
+description = "OpenCV's image functions the engine uses, bit-exact in plain Rust."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+# jpeg.rs's errors
+anyhow.workspace = true
+# only the parity/bench binary uses it (reads the cv2 dump's manifest)
+serde_json.workspace = true
+
+[[bin]]
+name = "vision_parity"
+path = "src/bin/vision_parity.rs"

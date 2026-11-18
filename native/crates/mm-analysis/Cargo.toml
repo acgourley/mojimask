@@ -1,0 +1,17 @@
+[package]
+name = "mm-analysis"
+description = "Per-detection measurements: RetinaFace landmarks + SFace (reid), OSNet (appearance), depth, pose helpers."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+mm-core.workspace = true
+mm-vision.workspace = true
+mm-ml.workspace = true
+ort = { version = "=2.0.0-rc.15", default-features = false }
+serde_json = { workspace = true, features = ["float_roundtrip"] }
+
+[[bin]]
+name = "mm-analysis-parity"
+path = "src/bin/parity.rs"

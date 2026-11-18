@@ -1,0 +1,31 @@
+[package]
+name = "mm-app"
+description = "The store: the app's state tree, command dispatch, change notifications; the host's C ABI (include/mm_app.h)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+# cdylib: the dev host dlopen()s it at start, so a Rust change needs no C++ relink. staticlib: linked into release.
+# rlib: for mm-cli.
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+mm-core.workspace = true
+mm-media.workspace = true
+mm-render.workspace = true
+mm-engine.workspace = true
+# the native engine's draw records (records.rs)
+mm-records.workspace = true
+mm-vision.workspace = true
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+wgpu.workspace = true
+gstreamer.workspace = true
+libc = "0.2"
+image.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-core-foundation.workspace = true
+objc2-core-video.workspace = true

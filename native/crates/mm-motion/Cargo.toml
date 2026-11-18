@@ -1,0 +1,23 @@
+[package]
+name = "mm-motion"
+description = "Our own motion: camera motion between frames and following a head (coarse-to-fine block matching, robust similarity fit)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+# rlib for the engine; cdylib so the Python parity tools can call the same code through ctypes (tools/parity/motion_*)
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+mm-vision.workspace = true
+serde_json.workspace = true
+image = { workspace = true, features = ["png", "jpeg"] }
+
+[[bin]]
+name = "motion_mats"
+path = "src/bin/motion_mats.rs"
+
+[[bin]]
+name = "motion_testset"
+path = "src/bin/motion_testset.rs"

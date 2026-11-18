@@ -145,6 +145,36 @@ MOJIMASK_DEPTH=anything-small .venv/bin/python app_server.py --port 8801 --dev  
   It goes through the running app exactly as a click does. Answers are tagged `via: "agent"`. One answer can settle
   or open others, so list the questions again after each. Work on a clone, never on someone's own project.
 
+## Native app (native/)
+
+The Rust rewrite (wgpu, GStreamer, ONNX Runtime, Qt Quick): [native/README.md](native/README.md) for building,
+running and the iteration loop; [native/ARCHITECTURE.md](native/ARCHITECTURE.md) for how it fits together. All state
+and logic are in Rust; QML only binds to `store.state` and calls `store.call(...)`.
+
+- Build with `native/build.sh`; drive the running app with `native/tools/mmctl` (`mmctl help`). It prints JSON.
+- **Checking a UI change:** start the app on jazz
+  (`native/tools/mmctl start --video out/poc/clips/jazz_4k.mp4 --data out/poc/data/jazz_4k`), edit the QML in
+  `native/app/qml` (the window reloads itself; the open video, frame and selection stay), then
+  `mmctl wait '<JS that is true once your change shows>'`, `mmctl tree` / `mmctl find` to check items and their
+  rects, and `mmctl grab out/native/<name>.png` to look at it. Give every interactive item an `objectName`.
+- A Rust change: `mmctl rebuild` (about 2 s, state restored). A C++ change: `cmake --build native/app/build`, then
+  `mmctl restart`.
+- `mmctl grab` greys every picture unless the open clip is public domain (`test_clips/jazz.mp4`, `out/poc/clips/`),
+  and `readback` refuses other clips: look at the UI around other videos, never at the people in them. If the person
+  you work for has the app open on their own project, don't drive their window: start a second one with its own
+  `--root` (a folder of symlinks to `web`, `models`, `test_clips`, `native`, with its own `out/`) and a copy of mmctl
+  beside it.
+- Scaled pictures in QML set `sourceSize` to the size they're drawn at (`components/Picture.qml` says why).
+- **The scan's rules differ from the Python app's on purpose** (fewer same-person questions; `native/docs/porting.md`,
+  decision 8). Measure a rule change with `native/tools/bench/rule_bench.py --note "..."` (jazz against its census,
+  the party clips' worst case, depth on), before and after, and put both in the commit. A whole scan against Python's,
+  numbers only, on any clip: `native/tools/parity/clip_scan_parity.py <video>`; the per-module parity checks are in
+  `native/tools/parity/`.
+- **The Mac app:** `native/packaging/make_app.sh --dmg` -> `native/dist/Mojimask.app` and `Mojimask.dmg` (the disk
+  image as `packaging/make_dmg.sh` makes the Python app's). It fails unless the bundle's `--check` (a scan and an
+  export of jazz with Homebrew hidden) passes. Signed ad hoc; `MOJIMASK_SIGN_ID` and `MOJIMASK_NOTARY_PROFILE` sign
+  with a Developer ID and notarize.
+
 ## Privacy (hard rules)
 
 - People's faces never leave the machine: no cloud vision, no sending frames or crops anywhere (including to

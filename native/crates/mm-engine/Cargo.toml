@@ -1,0 +1,26 @@
+[package]
+name = "mm-engine"
+description = "The work: the scan, projects on disk, jobs and progress. For now: the PoC dump as a stand-in project."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+mm-core.workspace = true
+mm-media.workspace = true
+mm-ml.workspace = true
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+bytemuck.workspace = true
+half.workspace = true
+image.workspace = true
+# the Python sidecar's HTTP API (plain http on 127.0.0.1: no TLS)
+ureq = { version = "3", default-features = false }
+mm-vision.workspace = true
+mm-analysis.workspace = true
+mm-scan.workspace = true
+mm-motion.workspace = true
+# the native engine's draw records and track.resolve (native/)
+mm-records.workspace = true
+ort = { version = "=2.0.0-rc.15", default-features = false }

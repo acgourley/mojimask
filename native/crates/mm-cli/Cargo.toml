@@ -1,0 +1,17 @@
+[package]
+name = "mm-cli"
+description = "The store without a window: run commands, dump state, render a frame. For tests and CI."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "mm-cli"
+path = "src/main.rs"
+
+[dependencies]
+mm-app = { workspace = true }
+mm-core.workspace = true
+mm-engine.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true

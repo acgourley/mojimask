@@ -1,0 +1,19 @@
+[package]
+name = "mm-scan"
+description = "The scan's decide step (mojimask/scan/): tracklets, join/follow, faces, graph, attach, cover/behind, blips, overlaps, same, questions, newalgo."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+mm-core.workspace = true
+mm-vision.workspace = true
+indexmap = "2"
+
+[[bin]]
+name = "scan_decide"
+path = "src/bin/scan_decide.rs"
+
+[[bin]]
+name = "scan_numcheck"
+path = "src/bin/scan_numcheck.rs"

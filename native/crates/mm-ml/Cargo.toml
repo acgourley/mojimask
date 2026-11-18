@@ -1,0 +1,21 @@
+[package]
+name = "mm-ml"
+description = "ort (ONNX Runtime): sessions, execution providers per platform, pre/post-processing."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+mm-core.workspace = true
+ort = { version = "=2.0.0-rc.15", default-features = false, features = ["std", "ndarray", "download-binaries", "tls-native", "copy-dylibs", "api-31", "coreml"] }
+ndarray = "0.17"
+image.workspace = true
+serde_json.workspace = true
+
+[features]
+webgpu = ["ort/webgpu"]
+dynamic = ["ort/load-dynamic"]
+
+[[bin]]
+name = "mm-ml-parity"
+path = "src/bin/parity.rs"

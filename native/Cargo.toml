@@ -1,0 +1,47 @@
+[workspace]
+resolver = "2"
+members = ["crates/mm-core", "crates/mm-media", "crates/mm-render", "crates/mm-ml", "crates/mm-engine", "crates/mm-app", "crates/mm-cli", "crates/mm-vision", "crates/mm-motion", "crates/mm-analysis", "crates/mm-scan", "crates/mm-records"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-or-later"
+
+[workspace.dependencies]
+mm-core = { path = "crates/mm-core" }
+mm-vision = { path = "crates/mm-vision" }
+mm-motion = { path = "crates/mm-motion" }
+mm-analysis = { path = "crates/mm-analysis" }
+mm-scan = { path = "crates/mm-scan" }
+mm-records = { path = "crates/mm-records" }
+mm-media = { path = "crates/mm-media" }
+mm-render = { path = "crates/mm-render" }
+mm-ml = { path = "crates/mm-ml" }
+mm-engine = { path = "crates/mm-engine" }
+mm-app = { path = "crates/mm-app" }
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+bytemuck = { version = "1", features = ["derive"] }
+half = { version = "2", features = ["bytemuck"] }
+image = { version = "0.25", default-features = false, features = ["png"] }
+wgpu = "30"
+pollster = "0.4"
+gstreamer = { version = "0.25", features = ["v1_26"] }
+gstreamer-app = { version = "0.25", features = ["v1_26"] }
+gstreamer-video = { version = "0.25", features = ["v1_26"] }
+objc2 = "0.6"
+objc2-foundation = "0.3"
+objc2-core-foundation = "0.3"
+objc2-core-video = "0.3"
+objc2-metal = "0.3"
+
+# dev builds: our crates lightly optimised (fast to rebuild), dependencies fully (decode and wgpu stay quick)
+[profile.dev]
+opt-level = 1
+debug = "line-tables-only"
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+opt-level = 3

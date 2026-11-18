@@ -1,0 +1,28 @@
+[package]
+name = "mm-records"
+description = "What is drawn on every frame: review_server.render_setup, track.resolve and draw_order, the lighting estimate, head pose and depth cuts, as FrameRecords for mm-render."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+mm-core.workspace = true
+mm-vision.workspace = true
+mm-analysis.workspace = true
+# the depth movie's luma (grey::MovieLuma)
+mm-media.workspace = true
+anyhow.workspace = true
+# a portrait photo, for measuring its own pose (portrait.sprite)
+image.workspace = true
+serde_json = { workspace = true, features = ["float_roundtrip"] }
+# the lighting caches (np.savez: a stored zip with zip64 extras) and their key (hashlib.md5)
+zip = { version = "2", default-features = false }
+md-5 = "0.10"
+
+[[bin]]
+name = "mm-records"
+path = "src/bin/mm-records.rs"
+
+[[bin]]
+name = "lighting-check"
+path = "src/bin/lighting-check.rs"

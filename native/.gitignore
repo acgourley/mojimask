@@ -1,0 +1,4 @@
+# build output: cargo's target dir and the Qt host's cmake build dirs
+target/
+app/build/
+app/build-*/
