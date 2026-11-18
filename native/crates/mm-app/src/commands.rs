@@ -27,7 +27,7 @@ pub const HELP: &[(&str, &str)] = &[
     ("result_style", "{style}: the result screen's cover style"),
     ("go", "{page, piece?}: show a page; projects leaves the open project; decisions with a piece: only its box's"),
     ("set_dev", "{on}: show the pages' developer parts or not (what someone without --dev sees); the hooks stay"),
-    ("ui_text", "web/strings.js, icons.js and brand.js's tables, for the pages"),
+    ("ui_text", "native/web/strings.js, icons.js and brand.js's tables, for the pages"),
     ("library_refresh", "list the projects again (the sidecar's /api/projects)"),
     ("import", "{path}: start a project from a video or photo where it is (a path or file:// URL); its scan shows"),
     ("import_sample", "start a project from the sample clip (test_clips/jazz.mp4)"),

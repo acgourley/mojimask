@@ -1,7 +1,8 @@
 // The window's opening picture (mojimask/splash.py): the app icon and the wordmark on black, over everything, then a
 // fade (splash.FADE_S) to the page. The icon is drawn as packaging/make_icon.py draws the real one: The Laughing
-// Cavalier (web/assets/icon_art.jpg) on a rounded tile, the disguise emoji over his face. The native window is up at
-// once, so it holds for HOLD_MS (enough to read as the app's face, not a flash) and then fades. A drag on it moves
+// Cavalier (native/web/assets/icon_art.jpg) on a rounded tile, the disguise emoji over his face. The native window is
+// up at once, so it holds for HOLD_MS (enough to read as the app's face, not a flash) and then fades. A drag on it
+// moves
 // the window, as on the Python app's splash. Shown once per launch: a live QML reload (--dev) skips it.
 import QtQuick
 import QtQuick.Window

@@ -595,7 +595,7 @@ mod tests {
     #[test]
     #[ignore]
     fn layout() {
-        let root = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../web/fonts/Nunito.woff2");
+        let root = concat!(env!("CARGO_MANIFEST_DIR"), "/../../web/fonts/Nunito.woff2");
         let st = MarkStyle { name: "mojimask".into(), split: 4, weight: 900.0, tracking: -0.01, first: [255; 3],
                              second: [255, 210, 63], font: std::fs::read(root).unwrap() };
         let (gs, asc) = glyphs(&st, 13.0).unwrap();

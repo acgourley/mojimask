@@ -1,7 +1,7 @@
 //! Emoji sets ("palettes") people can pick in the review tool. Port of `mojimask/palettes.py`.
 //!
-//! Definitions live in web/palettes.json (built into this crate), shared with the page (emoji_set_ui.js). Choice is
-//! stored in edits:
+//! Definitions live in native/web/palettes.json (built into this crate), shared with the page (emoji_set_ui.js). Choice
+//! is stored in edits:
 //! ```text
 //! edits["palette"]        = a preset key from palettes.json, or "custom"
 //! edits["palette_custom"] = list of emoji (when "custom"; only Custom is editable)
@@ -11,7 +11,7 @@
 use crate::pyjson::{Dict, Py};
 use std::sync::OnceLock;
 
-const JSON: &str = include_str!("../../../../web/palettes.json");
+const JSON: &str = include_str!("../../../web/palettes.json");
 
 pub struct Preset {
     pub key: String,
@@ -24,7 +24,7 @@ pub struct Preset {
 pub fn presets() -> &'static [Preset] {
     static P: OnceLock<Vec<Preset>> = OnceLock::new();
     P.get_or_init(|| {
-        let v = Py::parse(JSON).expect("web/palettes.json");
+        let v = Py::parse(JSON).expect("native/web/palettes.json");
         v.as_list().expect("a list").iter().map(|p| Preset {
             key: p.get("key").py_str(),
             label: p.get("label").as_str().unwrap_or("").to_string(),

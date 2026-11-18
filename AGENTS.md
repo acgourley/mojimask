@@ -164,6 +164,8 @@ and logic are in Rust; QML only binds to `store.state` and calls `store.call(...
   you work for has the app open on their own project, don't drive their window: start a second one with its own
   `--root` (a folder of symlinks to `web`, `models`, `test_clips`, `native`, with its own `out/`) and a copy of mmctl
   beside it.
+- The app's fonts, words (`strings.js`), icons, brand, palettes and pictures are in `native/web/`; the Python app's
+  `web/` links to them, so a change there shows in both apps.
 - Scaled pictures in QML set `sourceSize` to the size they're drawn at (`components/Picture.qml` says why).
 - **The scan's rules differ from the Python app's on purpose** (fewer same-person questions; `native/docs/porting.md`,
   decision 8). Measure a rule change with `native/tools/bench/rule_bench.py --note "..."` (jazz against its census,

@@ -51,6 +51,13 @@ pub fn root() -> PathBuf {
     std::env::current_dir().unwrap_or_default()
 }
 
+/// The files the app shows and draws with (fonts, the words, icons, brand, palettes, emoji eyes, pictures):
+/// `native/web` in a checkout, the bundle's `Resources/web`. (Laid out as the Python app's `web/`, whose copies of
+/// these are links here until it is retired.)
+pub fn web(root: &Path) -> PathBuf {
+    if bundled(root) { root.join("web") } else { root.join("native/web") }
+}
+
 /// Is this root a bundle's resources (read-only), rather than a checkout?
 pub fn bundled(root: &Path) -> bool {
     !root.join("native").is_dir()

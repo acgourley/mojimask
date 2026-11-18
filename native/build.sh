@@ -8,11 +8,11 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 cd "$HERE"
 if [ "${1:-}" = "--dist" ]; then shift; exec "$HERE/packaging/make_app.sh" "$@"; fi
 if [ "${1:-}" = "--release" ]; then
-    cargo build --release -p mm-app --lib -p mm-cli
+    cargo build --release -p mm-app --lib && cargo build --release -p mm-cli   # (--lib applies to every -p: mm-cli is a bin)
     B=app/build-release
     [ -f "$B/build.ninja" ] || cmake -S app -B "$B" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=/opt/homebrew -DMM_STATIC=ON
 else
-    cargo build -p mm-app --lib -p mm-cli
+    cargo build -p mm-app --lib && cargo build -p mm-cli
     B=app/build
     [ -f "$B/build.ninja" ] || cmake -S app -B "$B" -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_PREFIX_PATH=/opt/homebrew
 fi

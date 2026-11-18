@@ -14,9 +14,12 @@ import sys
 MEDIA = {".mp4", ".mov", ".m4v", ".avi", ".mkv", ".webm", ".heic", ".heif", ".jpg", ".jpeg", ".png", ".webp",
          ".gif", ".bmp", ".tif", ".tiff", ".npy", ".npz"}
 ALLOWED = [
-    "web/assets/gallery/*.jpg",   # old paintings, public domain (THIRD_PARTY_NOTICES.md)
-    "web/assets/icon_art.jpg",    # the app icon's painting, public domain
-    "web/assets/portrait_mona.png",  # the default portrait: the Mona Lisa's head, public domain
+    "native/web/assets/gallery/*.jpg",   # old paintings, public domain (THIRD_PARTY_NOTICES.md)
+    "native/web/assets/icon_art.jpg",    # the app icon's painting, public domain
+    "native/web/assets/portrait_mona.png",  # the default portrait: the Mona Lisa's head, public domain
+    "web/assets/gallery",               # links to the three above, for the Python app until it is retired
+    "web/assets/icon_art.jpg",
+    "web/assets/portrait_mona.png",
     "test_clips/jazz.mp4",    # Our Dancing Daughters (1928), US public domain: the sample clip
     "docs/media/jazz-walkthrough.mp4",         # the website's screen recording of the app on jazz.mp4
     "docs/media/jazz-walkthrough-poster.jpg",  # its poster frame

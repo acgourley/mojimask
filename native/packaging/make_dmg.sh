@@ -1,7 +1,7 @@
 #!/bin/bash
 # The disk image to send, as packaging/make_dmg.sh makes the Python app's: Mojimask.app beside an Applications
-# shortcut, over a picture that says to drag one onto the other and how to open it the first time (packaging/
-# dmg_background.py draws it; the app is signed ad hoc, not notarized). No read-me: the picture is the instructions.
+# shortcut, over a picture that says to drag one onto the other and how to open it the first time (dmg_background.swift
+# draws it; the app is signed ad hoc, not notarized). No read-me: the picture is the instructions.
 #
 #   native/packaging/make_dmg.sh [native/dist/Mojimask.app]    -> native/dist/Mojimask.dmg
 #
@@ -18,9 +18,6 @@ APP="$(cd "$(dirname "${1:-$HERE/../dist/Mojimask.app}")" && pwd)/$(basename "${
 NAME="$(basename "$APP" .app)"
 VOL="$NAME"
 OUT="$(dirname "$APP")/$NAME.dmg"
-# the main checkout (a worktree has no venv or models of its own): the parent of git's common directory, else ROOT
-G="$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"; MAIN="${G:+$(dirname "$G")}"; MAIN="${MAIN:-$ROOT}"
-PY="${PY:-$ROOT/.venv/bin/python}"; [ -x "$PY" ] || PY="$MAIN/.venv/bin/python"
 [ -d "$APP" ] || { echo "No $APP: run make_app.sh first" >&2; exit 1; }
 [ ! -d "/Volumes/$VOL" ] || { echo "/Volumes/$VOL is already mounted: eject it first" >&2; exit 1; }
 
@@ -30,7 +27,7 @@ STAGE="$WORK/stage"
 mkdir -p "$STAGE/.background"
 
 # the picture: 1x and 2x in one TIFF, so it's sharp on Retina screens
-read -r W H AX AY BX BY ICON < <(cd "$ROOT" && "$PY" packaging/dmg_background.py "$WORK/bg" "$NAME")
+read -r W H AX AY BX BY ICON < <(swift "$HERE/dmg_background.swift" "$WORK/bg" "$NAME")
 tiffutil -cathidpicheck "$WORK/bg/background.png" "$WORK/bg/background@2x.png" -out "$STAGE/.background/background.tiff" 2>/dev/null
 
 ditto "$APP" "$STAGE/$NAME.app"

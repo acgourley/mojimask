@@ -12,7 +12,7 @@ ROOT="$(cd "$NATIVE/.." && pwd)"
 # the main checkout (a worktree has no venv or models of its own): the parent of git's common directory, else ROOT
 G="$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"; MAIN="${G:+$(dirname "$G")}"; MAIN="${MAIN:-$ROOT}"
 deny=""
-for p in /opt/homebrew /usr/local "$ROOT/web" "$ROOT/models" "$ROOT/test_clips" "$ROOT/.venv" "$NATIVE/target" "$NATIVE/app" \
+for p in /opt/homebrew /usr/local "$ROOT/web" "$NATIVE/web" "$ROOT/models" "$ROOT/test_clips" "$ROOT/.venv" "$NATIVE/target" "$NATIVE/app" \
          "$MAIN/models" "$MAIN/.venv" "$MAIN/web"; do
   deny="$deny (subpath \"$p\")"
 done

@@ -1,5 +1,6 @@
 //! The words, icons and name the pages show, read from the web app's own files so there is one copy of each:
-//! `web/strings.js` (`STRINGS.en`), `web/icons.js` (`ICONS`, Lucide shapes) and `web/brand.js` (`BRAND`).
+//! `native/web/strings.js` (`STRINGS.en`), `native/web/icons.js` (`ICONS`, Lucide shapes) and `native/web/brand.js`
+//! (`BRAND`).
 //!
 //! [`Text::t`] is strings.js's `t()`: `{placeholders}` filled from vars (`{app}` is the brand's name), and a plural
 //! (`{one, other}`) picked by `vars.n` (English rules: 1 is "one"). QML gets the same tables (`ui_text`) for the
@@ -17,7 +18,7 @@ pub struct Text {
 
 impl Text {
     pub fn load(root: &Path) -> Result<Text> {
-        let read = |f: &str| std::fs::read_to_string(root.join("web").join(f)).with_context(|| format!("web/{f}"));
+        let read = |f: &str| std::fs::read_to_string(mm_core::paths::web(root).join(f)).with_context(|| format!("web/{f}"));
         let obj = |src: &str, start: &str| -> Result<Map<String, Value>> {
             let i = src.find(start).ok_or_else(|| anyhow!("no '{start}'"))? + start.len();
             let mut p = Parser { s: src.as_bytes(), i };

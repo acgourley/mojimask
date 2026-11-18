@@ -174,7 +174,7 @@ pub fn start(sh: &Arc<Shared>, rx: mpsc::Receiver<Job>) {
             }
         })
         .unwrap();
-    if let Ok(p) = std::fs::read(sh.root().join("web/palettes.json")) {
+    if let Ok(p) = std::fs::read(mm_core::paths::web(&sh.root()).join("palettes.json")) {
         sh.lib.lock().unwrap().palettes = serde_json::from_slice(&p).unwrap_or(Value::Null);
     }
     if sh.cfg.sidecar {

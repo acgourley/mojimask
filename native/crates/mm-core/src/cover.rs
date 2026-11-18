@@ -192,8 +192,8 @@ pub fn sprite_pose(key: &str, roll: f64, yaw: f64, side: i32, own_pose: Option<[
     (roll, yaw, f != 0 && side != 0 && side != f)
 }
 
-/// Where each emoji's eyes are (web/emoji_eyes.json): eye_y = the eye line as a fraction of the emoji picture's height,
-/// reference = where real eyes sit in a face cover box, from its centre in box sizes.
+/// Where each emoji's eyes are (native/web/emoji_eyes.json): eye_y = the eye line as a fraction of the emoji picture's
+/// height, reference = where real eyes sit in a face cover box, from its centre in box sizes.
 #[derive(Clone, Debug, Default, serde::Deserialize)]
 pub struct Eyes {
     pub reference: f64,

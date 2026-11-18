@@ -160,8 +160,10 @@ int main(int argc, char **argv) {
     engine.rootContext()->setContextProperty("store", &store);
     engine.rootContext()->setContextProperty("devMode", dev);
     engine.rootContext()->setContextProperty("qmlReloaded", false);   // true after a live reload (Splash.qml skips)
-    engine.rootContext()->setContextProperty("fontsDir", QUrl::fromLocalFile(root + "/web/fonts/"));
-    engine.rootContext()->setContextProperty("webDir", QUrl::fromLocalFile(root + "/web/"));
+    // the app's fonts and pictures (mm_core::paths::web): native/web in a checkout, Resources/web in the bundle
+    const QString web = QDir(root + "/native/web").exists() ? root + "/native/web" : root + "/web";
+    engine.rootContext()->setContextProperty("fontsDir", QUrl::fromLocalFile(web + "/fonts/"));
+    engine.rootContext()->setContextProperty("webDir", QUrl::fromLocalFile(web + "/"));
     const QString qmlDir = dev ? root + "/native/app/qml" : QString();
     const QUrl mainUrl = dev ? QUrl::fromLocalFile(qmlDir + "/Main.qml") : QUrl("qrc:/qml/Main.qml");
 

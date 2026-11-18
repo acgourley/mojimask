@@ -6,16 +6,15 @@
 - Rust crates: the normal (non-dev, non-build) dependency closure of mm-app and mm-cli for aarch64-apple-darwin
   (cargo metadata, offline), each crate's licence expression, and its own LICENSE*/COPYING*/NOTICE* files copied
   from the cargo registry to licenses/crates/<name>-<version>/. mojimask's own crates (mm-*) are AGPL-3.0 (LICENSE).
-- ONNX Runtime (linked statically by ort): MIT, with its ThirdPartyNotices (the onnxruntime Python package's copy;
-  the same upstream project).
+- ONNX Runtime (linked statically by ort): MIT, with its ThirdPartyNotices: licenses/onnxruntime/ beside this script
+  (copied from the onnxruntime 1.31.1 wheel, the same upstream project; ort's prebuilt library ships none).
 - Native libraries: every file relocate.py copied into Contents/Frameworks plus the Qt and GStreamer plugins in
   PlugIns/, grouped by the Homebrew formula they came from (dist/relocate.json's sources), with the formula's
   licence (FORMULA_LICENCES below: Homebrew's own metadata, written down so no network is needed) and its licence
   files from the Cellar. Qt and GLib ship none there: their LGPL texts are in licenses/ (LGPL-2.1, LGPL-3.0 with
   GPL-3.0, which LGPL-3.0 builds on).
 - Models, fonts, pictures and the sample clip: the same rows as the Python app's THIRD_PARTY_NOTICES.md (copied from
-  ROOT/THIRD_PARTY_NOTICES.md, so the two stay one source), with packaging/licenses.py's MIT texts for RetinaFace and
-  OSNet.
+  ROOT/THIRD_PARTY_NOTICES.md, so the two stay one source), with MIT texts for RetinaFace and OSNet (MIT below).
 Fails (exit 1) on a library whose formula has no licence entry, so a new dependency can't ship unlisted.
 """
 import glob
@@ -26,10 +25,23 @@ import shutil
 import subprocess
 import sys
 
-# the main checkout (a worktree has no venv or models of its own): the parent of git's common directory
-MAIN_CHECKOUT = os.path.dirname(subprocess.run(["git", "-C", os.path.dirname(os.path.abspath(__file__)), "rev-parse",
-                                                "--path-format=absolute", "--git-common-dir"],
-                                               capture_output=True, text=True).stdout.strip())
+MIT = """MIT License
+
+Copyright (c) {who}
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the Software without restriction, including without limitation the
+rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit
+persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the
+Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+"""
 
 FORMULA_LICENCES = {
     "qtbase": "LGPL-3.0-only (or GPL-2.0/3.0); dynamically linked, replaceable in Contents/Frameworks",
@@ -62,7 +74,7 @@ FORMULA_LICENCES = {
     "libffi": "MIT",
     "pcre": "BSD-3-Clause",
 }
-MAIN = MAIN_CHECKOUT
+HERE = os.path.dirname(os.path.abspath(__file__))  # native/packaging: licenses/ beside it
 
 
 def formula(real):
@@ -90,11 +102,11 @@ def main():
     # -- standard texts
     std = {
         "AGPL-3.0.txt": os.path.join(root, "LICENSE"),
-        "GPL-3.0.txt": os.path.join(root, "packaging", "GPL-3.0.txt"),
+        "GPL-3.0.txt": os.path.join(HERE, "licenses", "GPL-3.0.txt"),
         "LGPL-2.1.txt": glob.glob("/opt/homebrew/Cellar/gstreamer/*/LICENSE")[:1],
         "LGPL-3.0.txt": glob.glob("/opt/homebrew/Cellar/gmp/*/COPYING.LESSERv3")[:1],
-        "OFL-1.1-Nunito.txt": os.path.join(root, "web", "fonts", "Nunito-OFL.txt"),
-        "OFL-1.1-Inter.txt": os.path.join(root, "web", "fonts", "Inter-OFL.txt"),
+        "OFL-1.1-Nunito.txt": os.path.join(root, "native", "web", "fonts", "Nunito-OFL.txt"),
+        "OFL-1.1-Inter.txt": os.path.join(root, "native", "web", "fonts", "Inter-OFL.txt"),
     }
     for name, src in std.items():
         src = src[0] if isinstance(src, list) and src else src
@@ -102,15 +114,10 @@ def main():
             shutil.copy2(src, os.path.join(lic, name))
         else:
             missing.append(f"{name}: not found")
-    # MIT texts for the models whose repos state MIT (as packaging/licenses.py writes them)
-    sys.path.insert(0, os.path.join(root, "packaging"))
-    try:
-        import licenses as pylic  # noqa: E402  (its MIT template; it imports only the standard library)
-        for name, who in (("MIT-RetinaFace.txt", "2019 biubug6 (Pytorch_Retinaface)"),
-                          ("MIT-OSNet.txt", "2018 Kaiyang Zhou (deep-person-reid / torchreid)")):
-            open(os.path.join(lic, name), "w").write(pylic.MIT.format(who=who))
-    except Exception as e:  # pragma: no cover
-        missing.append(f"packaging/licenses.py: {e}")
+    # MIT texts for the models whose repos state MIT
+    for name, who in (("MIT-RetinaFace.txt", "2019 biubug6 (Pytorch_Retinaface)"),
+                      ("MIT-OSNet.txt", "2018 Kaiyang Zhou (deep-person-reid / torchreid)")):
+        open(os.path.join(lic, name), "w").write(MIT.format(who=who))
 
     # -- crates
     meta = json.loads(subprocess.run(["cargo", "metadata", "--format-version", "1", "--offline",
@@ -150,7 +157,7 @@ def main():
         missing.append("Apache-2.0.txt: no crate ships LICENSE-APACHE")
 
     # -- ONNX Runtime (static, through ort-sys)
-    ort = os.path.join(MAIN, ".venv/lib/python3.11/site-packages/onnxruntime")
+    ort = os.path.join(HERE, "licenses", "onnxruntime")
     os.makedirs(os.path.join(lic, "onnxruntime"))
     for f in ("LICENSE", "ThirdPartyNotices.txt"):
         if os.path.isfile(os.path.join(ort, f)):

@@ -104,6 +104,8 @@ dump on `test_clips/jazz.mp4`); otherwise you see the video alone and the status
 | `crates/mm-cli` | the store without a window |
 | `app/src` | the C++ host: `main.cpp` (start-up, live reload), `store` (bridge), `videoitem` (QQuickRhiItem), `devtools` (hooks), `platform_mac.mm` |
 | `app/qml` | `Main.qml`, `Theme.qml` (web/theme.css's tokens), `components/`, `pages/` |
+| `web/` | what the app shows and draws with: fonts, the words (`strings.js`), icons, the brand, emoji palettes and eyes, the paintings and the default portrait (`mm_core::paths::web`; the bundle's `Resources/web`). The Python app's `web/` links to these until it is retired |
+| `packaging/` | the Mac bundle and disk image (`make_app.sh`, `make_dmg.sh`), the icon and the disk image's picture drawn at build time (`make_icon.swift`, `dmg_background.swift`), licence texts (`licenses/`, `notices.py`) |
 | `tools/mmctl` | the hooks from the command line |
 
 ## How it works, in one paragraph

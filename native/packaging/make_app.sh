@@ -67,13 +67,8 @@ CLI="$NATIVE/target/release/mm-cli"
 [ -x "$HOST/Contents/MacOS/$NAME" ] && [ -x "$CLI" ] || { echo "no release host or mm-cli: run without --no-build" >&2; exit 1; }
 echo "host: $HOST"
 
-# models: desktop.CHECK_MODELS plus the depth model the app turns on (desktop.APP_DEPTH), as build_mac.sh bundles
+# models: the detectors, pose, face and body re-ID the scan runs (mm-engine), plus the depth model the app turns on
 MODELS=(yolov5m-face retinaface-r50 yolo11x-pose sface-2021dec osnet-ain-x1_0-msmt17)
-PY="$ROOT/.venv/bin/python"; [ -x "$PY" ] || PY="$MAIN/.venv/bin/python"
-if [ -x "$PY" ]; then
-  L=$(cd "$ROOT" && "$PY" -c 'import desktop; print(*desktop.CHECK_MODELS)' 2>/dev/null || true)
-  [ -n "$L" ] && read -r -a MODELS <<<"$L"
-fi
 DEPTH_REL=depth-anything-v2-small/model.onnx      # mm-analysis depth.rs: models/depth-anything-v2-small/model.onnx
 for m in "${MODELS[@]}"; do [ -f "$MODELS_SRC/onnx/$m.onnx" ] || { echo "missing $MODELS_SRC/onnx/$m.onnx" >&2; exit 1; }; done
 [ -f "$MODELS_SRC/$DEPTH_REL" ] || { echo "missing $MODELS_SRC/$DEPTH_REL" >&2; exit 1; }
@@ -91,7 +86,7 @@ chmod 755 "$C/MacOS/"*
 strip -x "$C/MacOS/mojimask-app" "$C/MacOS/mm-cli" 2>/dev/null
 
 # Qt plugins: the Cocoa platform, JPEG (FramedArt's gallery pictures; PNG is built into QtGui) and SVG (Icon.qml's
-# icons are SVG data URLs from web/icons.js)
+# icons are SVG data URLs from native/web/icons.js)
 mkdir -p "$C/PlugIns/platforms" "$C/PlugIns/imageformats"
 cp -L "$QT/plugins/platforms/libqcocoa.dylib" "$C/PlugIns/platforms/"
 cp -L "$QT/plugins/imageformats/libqjpeg.dylib" "$QT/plugins/imageformats/libqsvg.dylib" "$C/PlugIns/imageformats/"
@@ -127,10 +122,10 @@ EOF
 # and pictures)
 W="$R/web"
 mkdir -p "$W/assets"
-cp -R "$ROOT/web/fonts" "$W/fonts"
-for f in strings.js icons.js brand.js palettes.json emoji_eyes.json; do cp "$ROOT/web/$f" "$W/"; done
-cp -R "$ROOT/web/assets/gallery" "$W/assets/gallery"
-cp "$ROOT/web/assets/icon_art.jpg" "$ROOT/web/assets/portrait_mona.png" "$W/assets/"
+cp -R "$NATIVE/web/fonts" "$W/fonts"
+for f in strings.js icons.js brand.js palettes.json emoji_eyes.json; do cp "$NATIVE/web/$f" "$W/"; done
+cp -R "$NATIVE/web/assets/gallery" "$W/assets/gallery"
+cp "$NATIVE/web/assets/icon_art.jpg" "$NATIVE/web/assets/portrait_mona.png" "$W/assets/"
 mkdir -p "$R/models/onnx" "$R/models/$(dirname $DEPTH_REL)" "$R/test_clips"
 for m in "${MODELS[@]}"; do cp "$MODELS_SRC/onnx/$m.onnx" "$R/models/onnx/"; done
 cp "$MODELS_SRC/$DEPTH_REL" "$R/models/$DEPTH_REL"
@@ -138,10 +133,9 @@ cp "$ROOT/test_clips/jazz.mp4" "$R/test_clips/"
 cp "$HERE/check.sh" "$R/check.sh"; chmod 755 "$R/check.sh"
 cp "$ROOT/LICENSE" "$R/LICENSE"
 
-# the icon (packaging/make_icon.py, the Python app's), when the project's Python is there
-if [ -x "$PY" ] && "$PY" "$ROOT/packaging/make_icon.py" "$DIST/AppIcon.icns" >/dev/null 2>&1; then
-  cp "$DIST/AppIcon.icns" "$R/AppIcon.icns"
-fi
+# the icon, drawn now with AppKit (make_icon.swift: Apple's emoji isn't kept in git)
+swift "$HERE/make_icon.swift" "$NATIVE/web/assets/icon_art.jpg" "$DIST/AppIcon.icns" >/dev/null
+cp "$DIST/AppIcon.icns" "$R/AppIcon.icns"
 
 PL="$C/Info.plist"
 chmod u+w "$PL"   # the build's copy is read-only, and PlistBuddy fails quietly on it

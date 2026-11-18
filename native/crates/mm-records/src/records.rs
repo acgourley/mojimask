@@ -53,7 +53,7 @@ pub const FACE_DETS_FOR_N: [&str; 3] = ["yolov5m_face_tiled", "retinaface_r50_2x
 pub struct Options {
     /// the depth model (MOJIMASK_DEPTH's names); None = off. Default: MOJIMASK_DEPTH.
     pub depth: Option<String>,
-    /// the app's web/ folder (the default portrait photo, web/assets/portrait_mona.png)
+    /// the app's web/ folder (the default portrait photo, native/web/assets/portrait_mona.png)
     pub web: PathBuf,
     /// emoji size vs head box
     pub scale: f64,
@@ -74,7 +74,7 @@ impl Default for Options {
     fn default() -> Self {
         Options {
             depth: DP::setting().ok().flatten().map(str::to_string),
-            web: mm_core::paths::root().join("web"),
+            web: mm_core::paths::web(&mm_core::paths::root()),
             scale: SCALE,
             light_now: true,
             models: default_models(),

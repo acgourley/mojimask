@@ -133,7 +133,7 @@ impl Proj {
         let doc = Project::open(work, mm_core::edits::system_clock()).map_err(|e| anyhow!(e))?;
         let opts = mm_records::records::Options {
             depth: srv.cfg.depth.clone(),
-            web: srv.cfg.root.join("web"),
+            web: mm_core::paths::web(&srv.cfg.root),
             scale: SCALE,
             light_now: true,
             models: Some(srv.cfg.scan.models.clone()),
@@ -317,7 +317,7 @@ impl Proj {
             "/api/export_labels" if self.dev => return Ok(Reply::json(&self.export_labels()?)),
             "/api/portrait" => {
                 let edits = self.doc.lock().unwrap().edits.clone();
-                let web = srv.cfg.root.join("web");
+                let web = mm_core::paths::web(&srv.cfg.root);
                 let key = mm_records::records::key_for(mm_records::records::project_photo(&self.work, &edits));
                 let path = mm_records::records::photo_path(&key, &web).ok_or_else(|| Fail(404, "no photo".into()))?;
                 let png = mm_records::records::portrait_sprite_png(Path::new(&path), 120).map_err(|e| Fail(500, format!("{e:#}")))?;
@@ -473,7 +473,7 @@ impl Proj {
 
     /// project_server.setup(): the drawing constants and files.
     pub fn setup(&self, srv: &Server) -> Value {
-        let web = srv.cfg.root.join("web");
+        let web = mm_core::paths::web(&srv.cfg.root);
         let brand = read_brand(&web).unwrap_or(json!({}));
         let font = web.join("fonts").join(format!("{}.woff2", brand["font"].as_str().unwrap_or("Nunito")));
         let (rev, style) = {
@@ -601,7 +601,7 @@ impl Proj {
     }
 }
 
-/// about.BRAND: the object in web/brand.js.
+/// about.BRAND: the object in native/web/brand.js.
 pub fn read_brand(web: &Path) -> Option<Value> {
     let src = std::fs::read_to_string(web.join("brand.js")).ok()?;
     let at = src.find("const BRAND")?;

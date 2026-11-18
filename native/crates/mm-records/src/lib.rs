@@ -52,7 +52,7 @@ mod pose_tests {
     #[ignore]
     fn mona_pose() {
         let root = mm_core::paths::root();
-        let r = crate::records::measure_pose(&root.join("web/assets/portrait_mona.png"), &mm_core::paths::models(&root)).unwrap();
+        let r = crate::records::measure_pose(&mm_core::paths::web(&root).join("assets/portrait_mona.png"), &mm_core::paths::models(&root)).unwrap();
         println!("rs {} {} {}", r.0, r.1, r.2);
     }
 }

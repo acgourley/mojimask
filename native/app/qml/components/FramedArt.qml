@@ -1,5 +1,5 @@
-// One of the drop card's three old paintings (public domain, web/assets/gallery), in a gilt frame, its face covered
-// by an emoji drawn as text (app.html .framed-art).
+// One of the drop card's three old paintings (public domain, native/web/assets/gallery), in a gilt frame, its face
+// covered by an emoji drawn as text (app.html .framed-art).
 import QtQuick
 import QtQuick.Window
 import QtQuick.Effects

@@ -1,9 +1,9 @@
 //! What the app says about itself in an export's metadata (about.py): its name and where its source lives. The name
-//! is set only in web/brand.js (its BRAND object is plain JSON), read here at compile time, so the pages, the Python
-//! side and this can't disagree.
+//! is set only in native/web/brand.js (its BRAND object is plain JSON), read here at compile time, so the pages, the
+//! Python side and this can't disagree.
 use std::sync::OnceLock;
 
-const BRAND_JS: &str = include_str!("../../../../web/brand.js");
+const BRAND_JS: &str = include_str!("../../../web/brand.js");
 pub const URL: &str = "https://github.com/acgourley/mojimask";
 
 /// brand.js's BRAND object.

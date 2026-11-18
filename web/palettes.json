@@ -1,14 +1,1 @@
-[
-  {"key": "masquerave", "default": true, "label": "Masquerave", "hint": "Party faces: cool smileys, front-on animals, the full moon",
-   "emoji": ["😎", "🤩", "🥳", "😜", "🤪", "😝", "🤠", "🥸", "😏", "😆", "🤑", "😇", "🐶", "🐱", "🦊", "🐼", "🐨", "🐯", "🦁", "🐸", "🐵", "🐷", "🐮", "🐰", "🐻", "🐹", "🌝"]},
-  {"key": "zooanon", "label": "ZooAnon", "hint": "Just animals",
-   "emoji": ["🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐨", "🐯", "🦁", "🐮", "🐷", "🐸", "🐵", "🐲", "🐙"]},
-  {"key": "whitehat", "label": "White Hat", "hint": "Black, white and gray animals, for black-and-white footage",
-   "emoji": ["🐼", "🐨", "🐰", "🐭", "🐻‍❄️"]},
-  {"key": "flock", "label": "Flock", "hint": "Just sheep", "emoji": ["🐑", "🐏"]},
-  {"key": "food", "label": "PseudoNom", "hint": "Snacks for heads",
-   "emoji": ["🍔", "🍟", "🍕", "🌮", "🍓", "🍉", "🥑", "🍪", "🧁", "🍋", "🍑", "🥥", "🍊", "🍎", "🍅", "🥭", "🍙", "🧀", "🍈"]},
-  {"key": "hungerforce", "label": "HungerForce", "hint": "Fries, burgers, meatballs, shakes", "emoji": ["🍟", "🍔", "🧆", "🥤"]},
-  {"key": "moooooon", "label": "Moooooon", "hint": "Everyone is the full moon", "emoji": ["🌝"]},
-  {"key": "darkside", "label": "DarkSide", "hint": "Everyone is the dark moon", "emoji": ["🌚"]}
-]
+../native/web/palettes.json

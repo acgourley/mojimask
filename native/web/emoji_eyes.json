@@ -1,0 +1,14 @@
+{
+  "about": "Where each emoji's eyes are, so covers line them up with the person's eyes (track.eye_place). eye_y: the eye line as a fraction of the emoji picture's height (track.emoji_sprite: cropped to its ink, top 0, bottom 1), measured by eye on ruled sheets of the Apple Color Emoji glyphs (2026-11-14). Asymmetric eyes (🤪) use the middle of the two. Emoji without eyes (food, 🦋, 🐙) aren't listed and are drawn centred as before.",
+  "reference": -0.025,
+  "reference_about": "Where real eyes sit in a face cover box, from its centre in box sizes (negative = above): SCRFD's eye landmarks on 888 jazz covers (measured in the SCRFD era; the scan now uses RetinaFace, not re-measured), median -0.025 (quartiles -0.040, -0.010).",
+  "eye_y": {
+    "😎": 0.40, "🤩": 0.29, "🥳": 0.45, "😜": 0.44, "🤪": 0.34, "😝": 0.46, "🤠": 0.45, "🥸": 0.43,
+    "😏": 0.52, "😆": 0.44, "🤑": 0.45, "😇": 0.47, "😀": 0.40, "😺": 0.42,
+    "🐶": 0.60, "🐱": 0.62, "🦊": 0.57, "🐼": 0.62, "🐨": 0.60, "🐯": 0.60, "🦁": 0.45, "🐸": 0.28,
+    "🐵": 0.54, "🐷": 0.52, "🐮": 0.42, "🐰": 0.63, "🐻": 0.60, "🐹": 0.62, "🐭": 0.60, "🐲": 0.43,
+    "🐻‍❄️": 0.58, "🐑": 0.48, "🐏": 0.48, "🦄": 0.43,
+    "🌝": 0.43, "🌚": 0.43, "🌞": 0.43,
+    "👽": 0.52, "🤖": 0.48, "🎃": 0.40, "👻": 0.33
+  }
+}

@@ -42,7 +42,8 @@ QtObject {
     readonly property color dropA: "#2A2048"
     readonly property color dropB: "#17132A"
 
-    // type: Nunito (headings, the wordmark) and Inter (everything else) from web/fonts; the Mac's own if they don't load
+    // type: Nunito (headings, the wordmark) and Inter (everything else) from native/web/fonts; the Mac's own if they
+    // don't load
     readonly property FontLoader nunito: FontLoader { source: fontsDir + "Nunito.woff2" }
     readonly property FontLoader inter: FontLoader { source: fontsDir + "Inter.woff2" }
     readonly property string display: nunito.status === FontLoader.Ready ? nunito.name : "SF Pro Rounded"
@@ -64,7 +65,7 @@ QtObject {
     // room for the window's traffic lights (the bar is the title bar)
     readonly property int trafficLights: 78
 
-    // the wordmark (web/brand.js)
+    // the wordmark (native/web/brand.js)
     readonly property string brandName: "mojimask"
     readonly property int brandSplit: 4
     readonly property color brandFirst: "#FFFFFF"
