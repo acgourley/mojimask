@@ -292,6 +292,51 @@ else:
     np.save(mats_path, np.array(MATS))
 A.frames_dir = FRAMES_DIR
 
+# The pictures the pages are sent are at most VIEW_MAX on the long side: the size of the window, not the video. A 4K
+# frame sent whole cost ~16 ms to encode, ~0.7-3 MB to send and ~30 ms to decode in the page, every frame, only to be
+# shrunk on screen (measured 2026-11-17 on jazz upscaled to 4K). frames/ stays full size: the scan, lighting and depth
+# read it, and the face crops (Decisions, People) want every pixel of a face. Covers are still drawn on the full frame
+# with the export's own code (preview_frame); only the finished picture is shrunk.
+VIEW_MAX = 1920
+VIEW_K = min(1.0, VIEW_MAX / max(W, H))
+VIEW_DIR = f"{WORK}/frames_view"  # frames/ at the view size, made as they're asked for (cache: Clear cache removes it)
+
+
+def to_view(im):
+    """A picture of the full frame (or larger than VIEW_MAX), shrunk to the view size; smaller ones as they are."""
+    k = VIEW_MAX / max(im.shape[:2])
+    return cv2.resize(im, (round(im.shape[1] * k), round(im.shape[0] * k)), interpolation=cv2.INTER_AREA) if k < 1 else im
+
+
+def view_jpeg(t):
+    """Frame t as the pages are shown it (JPEG bytes), or None: frames/ itself when it's no bigger than VIEW_MAX, else
+    a shrunk copy in VIEW_DIR, made on first ask and remade if the frame is newer (frames/ rebuilt)."""
+    src = f"{FRAMES_DIR}/{t:05d}.jpg"
+    try:
+        st = os.stat(src)
+    except OSError:
+        return None
+    if VIEW_K >= 1:
+        with open(src, "rb") as f:
+            return f.read()
+    dst = f"{VIEW_DIR}/{t:05d}.jpg"
+    try:
+        if os.stat(dst).st_mtime >= st.st_mtime:
+            with open(dst, "rb") as f:
+                return f.read()
+    except OSError:
+        pass
+    im = cv2.imread(src)
+    if im is None:
+        return None
+    data = cv2.imencode(".jpg", to_view(im), [cv2.IMWRITE_JPEG_QUALITY, 88])[1].tobytes()
+    os.makedirs(VIEW_DIR, exist_ok=True)
+    tmp = f"{dst}.{threading.get_ident()}.tmp"  # (the editor asks for many frames at once)
+    with open(tmp, "wb") as f:
+        f.write(data)
+    os.replace(tmp, dst)
+    return data
+
 
 # The scan's tracks (proto_tracks.json, from its decide step): one per group it found, its covers already made.
 # A project without it was scanned before the current algorithm: it can't be opened (scan the video again).
@@ -982,7 +1027,7 @@ def preview_frame(t, opts):
         out = formats.fit_frame(out, max(2, round(st["width"] * k)), max(2, round(st["height"] * k)), st["fit"])
     if _yes(opts.get("mark")):
         out = T.watermark(out)
-    return cv2.imencode(".jpg", out, [cv2.IMWRITE_JPEG_QUALITY, 85])[1].tobytes()
+    return cv2.imencode(".jpg", to_view(out), [cv2.IMWRITE_JPEG_QUALITY, 85])[1].tobytes()
 
 
 def depth_frame(t):
@@ -1134,6 +1179,7 @@ class Handler(http_guard.GuardMixin, SimpleHTTPRequestHandler):
             return self._json({"error": "not found"}, 404)
         if self.path == "/api/init":
             return self._json(doc_reply({"n": N, "w": W, "h": H, "fps": FPS, "scale": A.scale, "frames": "/api/frames",
+                                         "view": "/api/view",  # the same frames, at most VIEW_MAX across (for showing whole)
                                          "photo": bool(VMETA.get("image")),
                                          "notices": NOTICES, "dev": DEV,
                                          "depth": occlusion() is not None}))
@@ -1173,6 +1219,12 @@ class Handler(http_guard.GuardMixin, SimpleHTTPRequestHandler):
                 return self._json({"error": "no such frame"}, 404)
             with open(fp, "rb") as f:
                 return self._send(f.read(), "image/jpeg")
+        if self.path.startswith("/api/view/"):  # a frame to show whole (view_jpeg); /api/frames is full size, for crops
+            name = os.path.basename(path)
+            data = view_jpeg(int(name[:5])) if re.fullmatch(r"\d{5}\.jpg", name) else None
+            if data is None:
+                return self._json({"error": "no such frame"}, 404)
+            return self._send(data, "image/jpeg")
         if self.path == "/api/formats":
             from mojimask import formats
             sizes = {p["id"]: {f: formats.output_size(p["id"], W, H, f, photo=bool(VMETA.get("image"))) for f in formats.FITS}

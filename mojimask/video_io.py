@@ -513,12 +513,15 @@ def frames(video, meta=None, color="detect"):
     return _frames_avf(video, meta, color) if HAVE_AVF else _frames_ffmpeg(video, meta, color)
 
 
-def extract_jpegs(video, out_dir, meta=None, quality=90):
-    """Write out_dir/00000.jpg, ... on the shared timeline (the review screens show these)."""
+def extract_jpegs(video, out_dir, meta=None, quality=90, progress=None):
+    """Write out_dir/00000.jpg, ... on the shared timeline (the review screens show these). progress(n): called
+    with the count written so far, every few frames."""
     os.makedirs(out_dir, exist_ok=True)
     n = 0
     for n, f in enumerate(frames(video, meta), 1):
         cv2.imwrite(f"{out_dir}/{n - 1:05d}.jpg", f, [cv2.IMWRITE_JPEG_QUALITY, quality])
+        if progress and n % 8 == 0:
+            progress(n)
     return n
 
 

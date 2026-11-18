@@ -72,7 +72,9 @@ def run(video, proj, report=print, profile=CORE, events=None, engine_cache=None)
     write_json(f"{proj}/meta.json", meta)
     report("prepare", 0.0, meta)
     if not os.path.exists(f"{proj}/frames/00000.jpg"):
-        video_io.extract_jpegs(video, f"{proj}/frames", meta)
+        expect = max(1, round((meta.get("video_duration") or meta.get("duration") or 0) * (meta.get("fps") or 30)))
+        video_io.extract_jpegs(video, f"{proj}/frames", meta,  # a 4K clip takes minutes here: say how far it's got
+                               progress=lambda k: report("prepare", min(k / expect, 0.99), {"frame": k, "frames": expect}))
     n = len([x for x in os.listdir(f"{proj}/frames") if x.endswith(".jpg")])
     meta["frames"] = n
     write_json(f"{proj}/meta.json", meta)

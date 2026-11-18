@@ -703,6 +703,9 @@ def emoji_for(tid, overrides):
 STYLES = ("emoji", "blur", "pixelate", "solid", "portrait")  # portrait: one headshot on every head (portrait.py)
 
 
+BLUR_STEPS = 24  # cover()'s blur: done at r / BLUR_STEPS pixels to one, for a face r pixels in radius
+
+
 def cover(f, c, scale, style):
     """Non-emoji covers over a circle of diameter c[2]*scale: blur, pixelate, or solid (opaque, most robust:
     blur can sometimes be partly reversed)."""
@@ -712,18 +715,29 @@ def cover(f, c, scale, style):
     if x2 - x1 < 2 or y2 - y1 < 2:
         return
     roi = f[y1:y2, x1:x2]
-    yy, xx = np.mgrid[y1:y2, x1:x2]
-    m = ((xx - c[0]) ** 2 + (yy - c[1]) ** 2 <= r * r)[..., None]
+    xx, yy = np.arange(x1, x2), np.arange(y1, y2)[:, None]
+    m = (xx - c[0]) ** 2 + (yy - c[1]) ** 2 <= r * r  # (the circle; rows and columns broadcast, not a full grid)
     if style == "blur":
         k = max(int(r) | 1, 3)
-        new = cv2.GaussianBlur(cv2.GaussianBlur(roi, (k, k), 0), (k, k), 0)
+        # A kernel the face's radius wide, twice: its cost grows with the cube of the face's size (a 4K frame with
+        # six faces took 340 ms). Blurred this much, nothing finer than ~r/BLUR_STEPS is left, so the same blur done on
+        # a copy shrunk to that grain and enlarged again looks the same, at a few ms. (Faces smaller than that: as is.)
+        d = r / BLUR_STEPS
+        if d >= 2:
+            h, w = roi.shape[:2]
+            ks = max(int(k / d) | 1, 3)
+            small = cv2.resize(roi, (max(round(w / d), 3), max(round(h / d), 3)), interpolation=cv2.INTER_AREA)
+            new = cv2.resize(cv2.GaussianBlur(cv2.GaussianBlur(small, (ks, ks), 0), (ks, ks), 0), (w, h),
+                             interpolation=cv2.INTER_LINEAR)
+        else:
+            new = cv2.GaussianBlur(cv2.GaussianBlur(roi, (k, k), 0), (k, k), 0)
     elif style == "pixelate":
         n = 5  # blocks across the face
         small = cv2.resize(roi, (n, max(int(n * roi.shape[0] / roi.shape[1]), 1)), interpolation=cv2.INTER_AREA)
         new = cv2.resize(small, (roi.shape[1], roi.shape[0]), interpolation=cv2.INTER_NEAREST)
     else:  # solid
         new = np.empty_like(roi); new[:] = (40, 40, 40)
-    f[y1:y2, x1:x2] = np.where(m, new, roi)
+    np.copyto(roi, new, where=m[..., None])  # (roi is a view of f)
 
 
 def draw_order(items, t, occlusion=None):

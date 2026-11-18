@@ -154,7 +154,7 @@ const imgs = new Map();
 // emoji: page_util.js emojiFor / paletteFor (the set is picked in emoji_set_ui.js; palettes.py makes the same choice)
 
 // ---- frames
-function frameURL(t) { return `${S.frames.replace(/^\//, "")}/${String(t).padStart(5, "0")}.jpg`; }
+function frameURL(t) { return `${(S.view || S.frames).replace(/^\//, "")}/${String(t).padStart(5, "0")}.jpg`; }
 function getImg(t) {
   if (!imgs.has(t)) {
     const im = new Image(); im.fetchPriority = t === cur ? "high" : "low";

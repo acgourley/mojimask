@@ -744,7 +744,7 @@ async function startResult(fresh) {
   const h = Math.min(innerHeight * 0.58, stage.clientWidth * S.h / S.w);
   stage.style.height = h + "px"; frame.style.aspectRatio = `${S.w} / ${S.h}`;
   const [raw, done] = frame.querySelectorAll("img");
-  done.removeAttribute("src"); raw.src = P(`${S.frames}/${pad5(t)}.jpg`);
+  done.removeAttribute("src"); raw.src = P(`${S.view || S.frames}/${pad5(t)}.jpg`);
   frame.querySelectorAll(".ring").forEach((r) => r.remove());
   for (const b of S.resolved[t] || []) if (b[4] === "obs" && b[3] >= 24) {
     const r = document.createElement("div"), d = b[3] * 1.35;

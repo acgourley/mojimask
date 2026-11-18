@@ -246,8 +246,7 @@ window.DecideViz = (() => {
       titleEl.textContent = T[0]; subEl.textContent = T[1];
       legendEl.innerHTML = stage === "follow" ? `<i style="background:#3ddc84"></i>${t("viz.face.found")} <i style="background:#5b8cff"></i>${t("viz.legend.looks_same")} <i class="ring"></i>${t("viz.legend.nothing")}`
         : stage === "faces" ? `<i style="background:#fff"></i>${t("viz.face.clear")} <i style="background:#888"></i>${t("viz.legend.not_comparable")}`
-        : stage === "pairs" ? `<i style="background:#3ddc84"></i>${t("viz.pair.merge")} <i style="background:#ff5c5c"></i>${t("viz.pair.refuse")} <i style="background:#ffb020"></i>${t("viz.pair.ask")}`
-        : stage === "same" && count.same ? `<i style="background:#ffb020"></i>${t("viz.pair.same")}` : "";
+        : "";  // (comparing pairs, and the questions at the end: each pair's card names its kind, in its arc's colour)
     }
 
     // ---- drawing
