@@ -5,6 +5,8 @@ Standard library only: desktop.py and the command line import it without the eng
 import fcntl
 import json
 import os
+import shutil
+import subprocess
 import sys
 
 from mojimask.paths import ROOT as HERE
@@ -46,6 +48,29 @@ def server_program(review_server_py):
         return {"program": path, "built": int(os.path.getmtime(path))}
     except OSError:
         return {"program": path}
+
+
+def copy_scan(src, dst, label):
+    """A copy of a scanned project without the answers: the scan and every cache come along (APFS clones, so no extra
+    disk until something changes), not edits.json, facts.json or answers set aside for another scan version (nor the
+    export), so it opens like a project just scanned. The app's own copy of the video is cloned too; a linked video is
+    shared. Used by the app's Clone fresh and the screen catalog."""
+    skip = {"edits.json", "facts.json", ".server.lock", "review_server.log", "final.mp4", "final.jpg"}
+    with open(os.path.join(src, "meta.json")) as f:
+        meta = json.load(f)
+    os.makedirs(dst)
+    for name in os.listdir(src):
+        if name in skip or name.startswith("facts.discarded"):
+            continue
+        a, b = os.path.join(src, name), os.path.join(dst, name)
+        if subprocess.run(["cp", "-cR", a, b], capture_output=True).returncode:  # clonefile; fall back to a copy
+            shutil.copytree(a, b) if os.path.isdir(a) else shutil.copy2(a, b)
+    if meta.get("copied") and os.path.dirname(os.path.abspath(meta.get("video", ""))) == os.path.abspath(src):
+        meta["video"] = os.path.join(dst, os.path.basename(meta["video"]))
+    meta["label"] = label
+    with open(os.path.join(dst, "meta.json.tmp"), "w") as f:
+        json.dump(meta, f)
+    os.replace(os.path.join(dst, "meta.json.tmp"), os.path.join(dst, "meta.json"))
 
 
 def lock_holder(proj):

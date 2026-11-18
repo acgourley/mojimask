@@ -10,7 +10,7 @@ the project is: [README](README.md). The rules for contributions: [CONTRIBUTING.
 | `desktop.py`, `app_server.py`, `decisions_cli.py` | the ways to start it: the Mac app, the same app in a browser, answering Decisions from a program |
 | `mojimask/` | the engine: detection (`pipeline.py`, `onnx_core.py`, `video_io.py`), the scan (`scan/`), answers (`facts.py`), the project server (`review_server.py`), drawing and export (`track.py`, `lighting.py`, `gpu_draw.py`, `formats.py`) |
 | `web/` | the pages, their scripts and styles, fonts and pictures: everything the app's window shows |
-| `tools/` | developer tools: the benchmarks (`bench/`, with their history in `bench/data/`), the census labeller (`label/`) and jazz's census (`truth/jazz.json`) |
+| `tools/` | developer tools: the benchmarks (`bench/`, with their history in `bench/data/`), the census labeller (`label/`), jazz's census (`truth/jazz.json`) and the screen catalog (`catalog/`) |
 | `experiments/` | finished research, with its own `requirements.txt`; nothing in the app imports it |
 | `packaging/` | the Mac build and its disk image, icon and licences |
 | `models/` | model weights (not in git; `models/README.md` says where each comes from) |
@@ -69,6 +69,16 @@ MOJIMASK_DEPTH=anything-small .venv/bin/python app_server.py --port 8801 --dev  
 - Nothing is fetched while the app runs: fonts go in `web/fonts/`, pictures in `web/assets/`, icons are inline SVG.
 - The Mac window (`desktop.py`) uses the page's bar as its title bar and opens on `mojimask/splash.py`'s picture. Check
   changes to those in the real window, not only a browser.
+- **The screen catalog** (`tools/catalog/`): scripted paths through the app, run in WebKit (the Mac window's engine)
+  on fresh copies of the jazz project. It's an integration test (`.venv/bin/python tools/catalog/run.py` ends 1 if a
+  path doesn't get through) and a viewer (`out/catalog/<run>/index.html`): every step of each path at a 13-inch Air's
+  window (1280 × 740) and the first-launch size (1280 × 880), as a screenshot or as live HTML where other words can be
+  tried in place, with each piece of text on it, its `strings.js` key and how it fits (characters to spare, wraps,
+  cut off, below the fold), and every key with the steps it shows on. Look at it when writing or translating the
+  app's words; add a path (`tools/catalog/paths.py`) for each new flow. `--drafts [file]` runs it with other wording laid over
+  today's (`out/strings_draft.json`; the format is in `tools/catalog/strings_record.js`). Setup, once:
+  `uv pip install --python .venv/bin/python -r tools/catalog/requirements.txt` and
+  `.venv/bin/python -m playwright install webkit`.
 
 ## Building the Mac app
 

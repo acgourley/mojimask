@@ -163,27 +163,14 @@ def _meta(pid):
 
 
 def clone_fresh(pid):
-    """A test copy of a scanned project: the scan and every cache come along (APFS clones, so no extra disk
-    until something changes), your answers don't -- no edits.json or facts.json, so it opens like a project just scanned.
-    The app's own copy of the video is cloned too; a linked video is shared."""
-    src = proj_dir(pid)
+    """A test copy of a scanned project, without your answers (projects.copy_scan), so it opens like a project just
+    scanned."""
     if not scanned(pid):
         return {"error": "only a scanned project can be cloned"}
     meta = _meta(pid)
     new = f"{pid.split('_fresh')[0]}_fresh{time.strftime('%H%M%S')}"
-    dst = proj_dir(new)
-    skip = {"edits.json", "facts.json", ".server.lock", "review_server.log", "final.mp4", "final.jpg"}
-    os.makedirs(dst)
-    for name in os.listdir(src):
-        if name in skip or name.startswith("facts.discarded"):  # (answers set aside for another scan version)
-            continue
-        a, b = os.path.join(src, name), os.path.join(dst, name)
-        if subprocess.run(["cp", "-cR", a, b], capture_output=True).returncode:  # clonefile; fall back to a copy
-            shutil.copytree(a, b) if os.path.isdir(a) else shutil.copy2(a, b)
-    if meta.get("copied") and os.path.dirname(os.path.abspath(meta.get("video", ""))) == os.path.abspath(src):
-        meta["video"] = os.path.join(dst, os.path.basename(meta["video"]))
-    meta["label"] = f"{(meta.get('label') or os.path.basename(meta.get('video', pid))).removesuffix(' (fresh test copy)')} (fresh test copy)"
-    write_json(os.path.join(dst, "meta.json"), meta)
+    projects.copy_scan(proj_dir(pid), proj_dir(new),
+                       f"{(meta.get('label') or os.path.basename(meta.get('video', pid))).removesuffix(' (fresh test copy)')} (fresh test copy)")
     return {"id": new}
 
 

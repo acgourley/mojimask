@@ -87,7 +87,10 @@ def force_dark():
 
 
 WINDOW_SIZE = (1280, 880)  # the first launch's size, in points, when the screen has room
-WINDOW_MIN = (980, 680)    # the pages' own minimum: the Edit step's video, timeline and side panel; Decisions' crops
+WINDOW_MIN = (1280, 680)   # the pages' minimum: the Edit step's video, timeline and side panel; Decisions' crops. 1280
+# wide fits every Mac the app runs on (Apple silicon; a 13-inch Air is 1440 points wide); not higher than 680 tall, as
+# a 13-inch Air has only about 800 points free under the menu bar and above the Dock (and the minimum is shrunk to fit
+# the screen anyway, below)
 WINDOW_FIT = 0.92          # at most this share of the screen's free area (without the menu bar and the Dock)
 WINDOW_KEY = "Mojimask main"  # the window's place, remembered by AppKit in the app's defaults
 
