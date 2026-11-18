@@ -53,8 +53,8 @@ native/packaging/make_app.sh --dmg                            # or package it: n
 See [CONTRIBUTING.md](CONTRIBUTING.md), including how to work with AI coding tools here. How to run, change and
 measure the app: [AGENTS.md](AGENTS.md), written for coding agents and people alike.
 
-## Licence
+## License
 
 AGPL-3.0 (see `LICENSE`), which the bundled YOLO11 pose model (Ultralytics, AGPL-3.0) requires. Model
-weights have their own licences, listed in `models/README.md`; everything else bundled is in
+weights have their own licenses, listed in `models/README.md`; everything else bundled is in
 `THIRD_PARTY_NOTICES.md`.

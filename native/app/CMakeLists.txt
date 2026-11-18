@@ -16,7 +16,7 @@ qt_standard_project_setup(REQUIRES 6.7)
 
 qt_add_executable(Mojimask MACOSX_BUNDLE
     src/main.cpp src/mmapi.cpp src/mmapi.h src/store.cpp src/store.h src/videoitem.cpp src/videoitem.h
-    src/devtools.cpp src/devtools.h src/platform_mac.mm
+    src/devtools.cpp src/devtools.h src/platform_mac.mm src/macmenu.h
     ../crates/mm-app/include/mm_app.h)
 target_include_directories(Mojimask PRIVATE ../crates/mm-app/include)
 

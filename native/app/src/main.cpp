@@ -16,6 +16,7 @@
 // Inside a bundle, the environment the bundled libraries need is set here before anything loads (each variable only
 // when not already set): GStreamer's plugin path, scanner and registry, GIO's modules, MM_ROOT, MOJIMASK_MODELS.
 #include "devtools.h"
+#include "macmenu.h"
 #include "mmapi.h"
 #include "store.h"
 #include "videoitem.h"
@@ -42,6 +43,7 @@
 #include <unistd.h>
 
 void macStyleWindow(QWindow *w);
+void macEditActions();   // Edit > Cut, Copy, Paste, Select All for text fields (platform_mac.mm)
 
 static void messageHandler(QtMsgType type, const QMessageLogContext &ctx, const QString &msg) {
     int level = type == QtDebugMsg ? 0 : type == QtInfoMsg ? 1 : type == QtWarningMsg ? 2 : 3;
@@ -154,6 +156,9 @@ int main(int argc, char **argv) {
     qmlRegisterType<VideoItem>("Mojimask.Native", 1, 0, "VideoItem");
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty("store", &store);
+    MacMenu macMenu;
+    macEditActions();
+    engine.rootContext()->setContextProperty("mac", &macMenu);   // the menu bar's About, Bring All to Front
     engine.rootContext()->setContextProperty("devMode", dev);
     engine.rootContext()->setContextProperty("qmlReloaded", false);   // true after a live reload (Splash.qml skips)
     // the app's fonts and pictures (mm_core::paths::web): native/web in a checkout, Resources/web in the bundle

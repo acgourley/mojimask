@@ -3,6 +3,7 @@
 // store.call); this file only lays them out.
 import QtQuick
 import QtQuick.Controls.Basic
+import QtQuick.Window
 import QtQuick.Layouts
 import "."
 import "components"
@@ -23,9 +24,78 @@ ApplicationWindow {
     readonly property var project: store.state.project
     readonly property string page: app.page
 
-    // the Mac menu bar's Undo / Redo (app.html menuCommand): the project's history on its server
-    Shortcut { sequences: [StandardKey.Undo]; enabled: win.project.open && win.page !== "editor"; onActivated: store.call("undo") }
-    Shortcut { sequences: [StandardKey.Redo]; enabled: win.project.open && win.page !== "editor"; onActivated: store.call("redo") }
+    // The Mac menu bar (the Python app's desktop.py menu_bar): macOS's own app menu (Services, Hide, Quit; Qt moves
+    // "About …" there; macOS adds Writing Tools, Dictation and Emoji to Edit), then File, Edit, View, Window and Help.
+    // Undo and Redo are a focused text field's when it has something to undo, otherwise the open project's history on
+    // its server. A text field takes ⌘Z, ⌘C and the rest before the menu does. Check the bar with
+    // `mmctl eval 'mac.menus()'` and `mac.press("Edit", "Undo")` (macmenu.h). No title may start with "Exit", "Quit",
+    // "About", "Preferences" or "Settings" unless it should move to the app menu (Qt's guess at a menu item's role),
+    // hence "Leave Full Screen".
+    readonly property var field: activeFocusItem && typeof activeFocusItem.selectAll === "function"
+                                 && activeFocusItem.selectedText !== undefined ? activeFocusItem : null
+    function undoRedo(redo) {
+        if (field && (redo ? field.canRedo : field.canUndo)) return redo ? field.redo() : field.undo()
+        if (project.open) store.call(redo ? "redo" : "undo")
+    }
+    function openFile() {
+        if (page === "editor" && !store.state.editor.project) return editorPage.openVideo()   // --video: the dump editor
+        if (page !== "projects") store.call("go", { page: "projects" })
+        projectsPage.choose()
+    }
+    // macOS's Window and Help menus and the app menu's separators (macmenu.h), once Qt has made the native menus: they
+    // aren't there yet when the window loads, so on each activation (it's cheap and the same each time)
+    onActiveChanged: if (active) mac.tidy(T.t("menu.window"), T.t("menu.help"))
+    menuBar: MenuBar {
+        objectName: "menubar"
+        Menu {
+            title: T.t("menu.file")
+            Action { objectName: "menu-open"; text: T.t("menu.open"); shortcut: StandardKey.Open; onTriggered: win.openFile() }
+            MenuSeparator {}
+            Action { objectName: "menu-close"; text: T.t("menu.close_window"); shortcut: StandardKey.Close; onTriggered: win.close() }
+        }
+        Menu {
+            title: T.t("menu.edit")
+            Action {
+                objectName: "menu-undo"; text: T.t("menu.undo"); shortcut: StandardKey.Undo
+                enabled: (win.field && win.field.canUndo) || (win.project.open && win.project.can_undo)
+                onTriggered: win.undoRedo(false)
+            }
+            Action {
+                objectName: "menu-redo"; text: T.t("menu.redo"); shortcut: StandardKey.Redo
+                enabled: (win.field && win.field.canRedo) || (win.project.open && win.project.can_redo)
+                onTriggered: win.undoRedo(true)
+            }
+            MenuSeparator {}
+            // these four are AppKit's cut: copy: paste: selectAll: (Qt picks them by title), handled for the focused text
+            // field in platform_mac.mm, which also enables them
+            Action { objectName: "menu-cut"; text: T.t("menu.cut"); shortcut: StandardKey.Cut }
+            Action { objectName: "menu-copy"; text: T.t("menu.copy"); shortcut: StandardKey.Copy }
+            Action { objectName: "menu-paste"; text: T.t("menu.paste"); shortcut: StandardKey.Paste }
+            Action { objectName: "menu-select-all"; text: T.t("menu.select_all"); shortcut: StandardKey.SelectAll }
+        }
+        Menu {
+            title: T.t("menu.view")
+            Action {
+                objectName: "menu-full-screen"
+                text: T.t(win.visibility === Window.FullScreen ? "menu.full_screen_off" : "menu.full_screen")
+                shortcut: StandardKey.FullScreen
+                onTriggered: win.visibility === Window.FullScreen ? win.showNormal() : win.showFullScreen()
+            }
+        }
+        Menu {
+            title: T.t("menu.window")
+            Action { objectName: "menu-minimize"; text: T.t("menu.minimize"); shortcut: "Ctrl+M"; onTriggered: win.showMinimized() }
+            Action { objectName: "menu-zoom"; text: T.t("menu.zoom"); onTriggered: win.visibility === Window.Maximized ? win.showNormal() : win.showMaximized() }
+            MenuSeparator {}
+            Action { objectName: "menu-bring-all"; text: T.t("menu.bring_all"); onTriggered: mac.bringAllToFront() }
+        }
+        Menu {
+            title: T.t("menu.help")
+            Action { objectName: "menu-about"; text: T.t("menu.about"); onTriggered: mac.about() }
+            Action { objectName: "menu-github"; text: T.t("menu.github"); onTriggered: Qt.openUrlExternally(T.tables.brand.url) }
+            Action { objectName: "menu-licences"; text: T.t("menu.licences"); onTriggered: Qt.openUrlExternally(noticesUrl) }
+        }
+    }
 
     header: Rectangle {
         objectName: "bar"
@@ -116,11 +186,11 @@ ApplicationWindow {
         id: pages
         anchors.fill: parent
         currentIndex: Math.max(0, win.app.pages.indexOf(win.page))
-        ProjectsPage {}
+        ProjectsPage { id: projectsPage }
         ScanPage {}
         DecisionsPage {}
         PeoplePage {}
-        EditorPage {}
+        EditorPage { id: editorPage }
         ExportPage {}
         ResultPage {}
     }

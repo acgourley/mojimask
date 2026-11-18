@@ -64,9 +64,8 @@ Rectangle {
             Shortcut { enabled: page.keysOn && page.proj; sequence: modelData; onActivated: page.key(modelData === "Shift+?" ? "?" : modelData) }
         }
     }
-    Shortcut { enabled: page.active && page.proj; sequences: [StandardKey.Undo]; onActivated: store.call("undo") }
-    Shortcut { enabled: page.active && page.proj; sequences: [StandardKey.Redo]; onActivated: store.call("redo") }
-    Shortcut { enabled: page.active; sequences: [StandardKey.Open]; onActivated: if (!page.proj) openDialog.open() }
+    // ⌘Z, ⇧⌘Z and ⌘O are the menu bar's (Main.qml): Undo and Redo the project's history, Open this (no project)
+    function openVideo() { openDialog.open() }
     Shortcut { enabled: page.active; sequence: "Ctrl+E"; onActivated: if (!page.proj) saveDialog.open() }
 
     RowLayout {

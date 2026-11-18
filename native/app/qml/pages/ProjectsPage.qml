@@ -14,6 +14,8 @@ Rectangle {
     color: Theme.bg
     readonly property var lib: store.state.library
     readonly property bool wide: width >= 980
+    // File > Open (Main.qml's menu bar): the same chooser as the page's button
+    function choose() { if (lib.ready && !lib.busy) chooser.open() }
 
     FileDialog {
         id: chooser
