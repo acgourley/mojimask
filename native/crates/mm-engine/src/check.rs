@@ -56,7 +56,7 @@ fn fl(v: &Py) -> Vec<f64> {
 }
 
 pub fn evidence(rec: &Path, proj: &Path, o: &Options, only: Option<&str>) -> serde_json::Value {
-    let frames = Arc::new(ev::Frames::new(proj));
+    let frames = Arc::new(ev::Frames::for_project(proj).expect("the project's meta.json"));
     let models = ev::models(&o.models.join("onnx"), o.analysis_cpu, o.cache.as_ref().map(|c| c.join("analysis")));
     let faces = ev::RealFaces::new(frames.clone(), models.clone(), None);
     let body = ev::RealBody { frames: frames.clone(), models: models.clone() };

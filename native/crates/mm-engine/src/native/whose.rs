@@ -66,8 +66,7 @@ fn look(srv: &Server, p: &Proj, piece: &str, boxes: &OMap) -> Look {
     let models = srv.models();
     let (mut fs, mut crops) = (vec![], vec![]);
     for t in ts {
-        let Ok(d) = mm_vision::jpeg::read_bgr(&p.work.join("frames").join(format!("{t:05}.jpg"))) else { continue };
-        let img = mm_vision::Mat::from_vec(d.h, d.w, 3, d.data);
+        let Ok(img) = p.frames.try_get(t) else { continue };
         let c = boxes.v[&t];
         if let Some(f) = crate::evidence::face(&models, &img, &c) {
             if let Some(e) = f.emb {

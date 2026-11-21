@@ -33,7 +33,9 @@ fn main() -> anyhow::Result<()> {
         snap.push((tid.to_string(), b));
     }
     let t0 = std::time::Instant::now();
-    let l = Lighting::new(&snap, &proj.join("frames"), &proj, None)?;
+    let frames = mm_media::frames::ScanFrames::for_project(&proj)?.sized(6, 512 << 20);
+    let n_frames = pyjson::load(&proj.join("meta.json")).map_err(anyhow::Error::msg)?.get("frames").as_i64().unwrap_or(0).max(0) as usize;
+    let l = Lighting::new(&snap, &frames, n_frames, &proj, None)?;
     let secs = t0.elapsed().as_secs_f64();
     let n = l.n() as i64;
     let mut out = Dict::new();
@@ -66,7 +68,7 @@ fn main() -> anyhow::Result<()> {
     }).collect()));
     let mut g = Dict::new();
     for t in grain {
-        g.insert(t.to_string(), Py::Float(frame_grain(&Frame::read(&proj.join("frames"), t)?)));
+        g.insert(t.to_string(), Py::Float(frame_grain(&Frame::read(&frames, t)?)));
     }
     out.insert("grain", Py::Dict(g));
     // user settings on top: --settings '[edits, ...]' -> per edits: settings(), film_settings and apply_settings

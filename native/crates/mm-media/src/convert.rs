@@ -215,7 +215,9 @@ pub fn yuv_to_bgr(yuv: &Yuv, colour: Colour, matrix: [[f32; 4]; 3]) -> Bgr {
     let s = if yuv.depth > 8 { 0.25f32 } else { 1.0 };
     match colour {
         Colour::Detect => {
-            for r in 0..h {
+            // rows on threads (each row on its own; the scan converts every frame it reads: 40 ms per 4K frame on
+            // one core)
+            mm_vision::mat::par_rows(&mut out, w * 3, |r, orow| {
                 for c in 0..w {
                     let y = yuv.y[r * w + c] as f32 * s;
                     let k = ((r / 2) * cw + c / 2) * 2;
@@ -226,10 +228,10 @@ pub fn yuv_to_bgr(yuv: &Yuv, colour: Colour, matrix: [[f32; 4]; 3]) -> Bgr {
                         // `m0*v0 + m1*v1 + m2*v2 + m3` into fma(m2, v2, fma(m0, v0, m1*v1)) + m3: the plain
                         // sum differed on ~50-400 pixels per 4K party frame (see the module doc).
                         let x = row[2].mul_add(v, row[0].mul_add(y, row[1] * u)) + row[3];
-                        out[(r * w + c) * 3 + i] = x.round_ties_even().clamp(0.0, 255.0) as u8;
+                        orow[c * 3 + i] = x.round_ties_even().clamp(0.0, 255.0) as u8;
                     }
                 }
-            }
+            });
         }
         Colour::Display => {
             let uvat = |x: usize, y: usize| -> (f32, f32) {
@@ -301,16 +303,15 @@ pub fn upright(img: &Bgr, rot: u32) -> Bgr {
     let (w, h) = (img.w as usize, img.h as usize);
     match rot {
         90 | 270 => {
+            // output row ny (h wide) on threads: 90 clockwise takes source (x = ny, y = h-1-nx); 270 (x = w-1-ny, y = nx)
             let mut out = vec![0u8; w * h * 3];
-            for y in 0..h {
-                for x in 0..w {
-                    // 90 clockwise: (x, y) -> (h-1-y, x) in a h-wide picture; 270: (y, w-1-x)
-                    let (nx, ny) = if rot == 90 { (h - 1 - y, x) } else { (y, w - 1 - x) };
+            mm_vision::mat::par_rows(&mut out, h * 3, |ny, orow| {
+                for nx in 0..h {
+                    let (x, y) = if rot == 90 { (ny, h - 1 - nx) } else { (w - 1 - ny, nx) };
                     let s = (y * w + x) * 3;
-                    let d = (ny * h + nx) * 3;
-                    out[d..d + 3].copy_from_slice(&img.data[s..s + 3]);
+                    orow[nx * 3..nx * 3 + 3].copy_from_slice(&img.data[s..s + 3]);
                 }
-            }
+            });
             Bgr { w: h as u32, h: w as u32, data: out }
         }
         180 => {

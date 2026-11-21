@@ -217,6 +217,147 @@ fn main() -> Result<()> {
             let d = mm_media::Decoder::open(&a[2])?;
             println!("{}", json!({"n": d.probe.n, "keys": d.keyframes()}));
         }
+        "luma-chunks" => {
+            // luma-chunks MOVIE [FPS]: the depth movie's Y planes read whole, then CHUNK (16) frames at a time as
+            // mm_analysis::depth::Depth::full reads them; both must agree byte for byte. Prints the times.
+            let path = std::path::PathBuf::from(&a[2]);
+            let fps: f64 = a.get(3).and_then(|s| s.parse().ok()).unwrap_or(30.0);
+            let t0 = std::time::Instant::now();
+            let all = mm_media::grey::luma(&path, fps, 0, None)?;
+            let whole = t0.elapsed().as_secs_f64();
+            let t0 = std::time::Instant::now();
+            let (mut n, mut wrong, mut slowest) = (0usize, 0usize, 0f64);
+            for c in 0..all.len().div_ceil(16) {
+                let t1 = std::time::Instant::now();
+                let got = mm_media::grey::luma(&path, fps, c * 16, Some(16))?;
+                slowest = slowest.max(t1.elapsed().as_secs_f64());
+                for (i, y) in got.iter().filter(|(i, _)| *i < (c + 1) * 16) {
+                    n += 1;
+                    if all.iter().find(|(j, _)| j == i).map(|(_, z)| z.data != y.data).unwrap_or(true) {
+                        wrong += 1;
+                    }
+                }
+            }
+            let chunks = t0.elapsed().as_secs_f64();
+            println!("{}", json!({"frames": all.len(), "chunked": n, "wrong": wrong, "whole_s": whole, "chunks_s": chunks, "slowest_chunk_s": slowest}));
+        }
+        "frame-cost" => {
+            // frame-cost CLIP [N]: what a scan frame costs from the video against from a JPEG, per frame, over the
+            // first N frames (default 120): forward decode alone, the detect-colour conversion, and encoding / decoding
+            // that picture as the project's quality-90 JPEG.
+            let mut d = mm_media::Decoder::open(&a[2])?;
+            let tags = d.colour_tags().map(|s| s.to_string());
+            let n: usize = a.get(3).and_then(|s| s.parse().ok()).unwrap_or(120);
+            let (mut dec, mut conv, mut enc, mut jdec, mut k) = (0f64, 0f64, 0f64, 0f64, 0usize);
+            let mut t0 = std::time::Instant::now();
+            while let Some((t, f)) = d.next()? {
+                dec += t0.elapsed().as_secs_f64();
+                if t >= n {
+                    break;
+                }
+                let t1 = std::time::Instant::now();
+                let img = mm_media::convert::frame_bgr(&f, &d.probe, tags.as_deref(), mm_media::convert::Colour::Detect)?;
+                conv += t1.elapsed().as_secs_f64();
+                if t % 10 == 0 {
+                    let t1 = std::time::Instant::now();
+                    let j = mm_vision::jpeg::encode_bgr(&img.data, img.w as usize, img.h as usize, 90);
+                    enc += t1.elapsed().as_secs_f64();
+                    let t1 = std::time::Instant::now();
+                    let _ = mm_vision::jpeg::decode_bgr(&j)?;
+                    jdec += t1.elapsed().as_secs_f64();
+                    k += 1;
+                }
+                t0 = std::time::Instant::now();
+            }
+            let ms = |x: f64, m: usize| (x / m as f64 * 1e4).round() / 10.0;
+            println!("{}", json!({"w": d.probe.width, "h": d.probe.height, "frames": n, "decode_ms": ms(dec, n), "detect_colour_ms": ms(conv, n),
+                                  "jpeg_encode_ms": ms(enc, k), "jpeg_decode_ms": ms(jdec, k)}));
+        }
+        "seek-same" => {
+            // seek-same CLIP [K]: every slot's detect-colour picture going forward, then K seeks (fixed pseudo-random
+            // slots, frame_at from wherever the decoder is) must give the same bytes: the scan reads frames both ways.
+            let mut d = mm_media::Decoder::open(&a[2])?;
+            let tags = d.colour_tags().map(|s| s.to_string());
+            let k: usize = a.get(3).and_then(|s| s.parse().ok()).unwrap_or(60);
+            let det = |f: &mm_media::Frame, p: &mm_media::Probe| mm_media::convert::frame_bgr(f, p, tags.as_deref(), mm_media::convert::Colour::Detect).map(|b| md5ish(&b.data));
+            let mut fwd = vec![];
+            while let Some((_, f)) = d.next()? {
+                fwd.push(det(&f, &d.probe)?);
+            }
+            let n = fwd.len();
+            let (mut x, mut wrong, mut bad) = (777u64, 0usize, vec![]);
+            for _ in 0..k {
+                x = x.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+                let t = ((x >> 33) as usize) % n;
+                let f = d.frame_at(t)?.ok_or_else(|| anyhow::anyhow!("no frame {t}"))?;
+                if det(&f, &d.probe)? != fwd[t] {
+                    wrong += 1;
+                    bad.push(t);
+                }
+            }
+            println!("{}", json!({"frames": n, "seeks": k, "wrong": wrong, "wrong_slots": bad}));
+        }
+        "detect-hash" => {
+            // detect-hash CLIP [N]: one hash over the first N slots' detect-colour pictures (default all), and the ms
+            // per frame the conversion took: to check a change to the conversion leaves its bytes alone.
+            let mut d = mm_media::Decoder::open(&a[2])?;
+            let tags = d.colour_tags().map(|s| s.to_string());
+            let n: usize = a.get(3).and_then(|s| s.parse().ok()).unwrap_or(usize::MAX);
+            let (mut all, mut k, mut secs) = (String::new(), 0usize, 0f64);
+            while let Some((t, f)) = d.next()? {
+                if t >= n {
+                    break;
+                }
+                let t0 = std::time::Instant::now();
+                let b = mm_media::convert::frame_bgr(&f, &d.probe, tags.as_deref(), mm_media::convert::Colour::Detect)?;
+                secs += t0.elapsed().as_secs_f64();
+                all.push_str(&md5ish(&b.data));
+                k += 1;
+            }
+            println!("{}", json!({"frames": k, "hash": md5ish(all.as_bytes()), "convert_ms": (secs / k as f64 * 1e4).round() / 10.0}));
+        }
+        "frames-vs-jpeg" => {
+            // frames-vs-jpeg VIDEO FRAMES_DIR: every slot from ScanFrames (8 threads, shuffled order: the pool, seeks
+            // and the cache as the scan uses them) against the JPEG the old scan wrote for it (frames/NNNNN.jpg).
+            // Per slot: mean absolute difference to its own JPEG and to its neighbours' (t-2..t+2); a frame from the
+            // wrong time matches a neighbour better.
+            let dir = std::path::PathBuf::from(&a[3]);
+            let n = std::fs::read_dir(&dir)?.filter(|e| e.as_ref().is_ok_and(|e| e.file_name().to_string_lossy().ends_with(".jpg"))).count();
+            let jpg = |t: usize| mm_vision::jpeg::read_bgr(&dir.join(format!("{t:05}.jpg"))).map(|d| d.data);
+            let jpgs: Vec<Vec<u8>> = (0..n).map(jpg).collect::<Result<_>>()?;
+            let fr = mm_media::frames::ScanFrames::open(&a[2], 8, 1 << 30);
+            let mut order: Vec<usize> = (0..n).collect();
+            let mut x: u64 = 99;
+            for i in (1..n).rev() {
+                x = x.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+                order.swap(i, (x >> 33) as usize % (i + 1));
+            }
+            let got: Vec<std::sync::Mutex<Option<Vec<u8>>>> = (0..n).map(|_| std::sync::Mutex::new(None)).collect();
+            let next = std::sync::atomic::AtomicUsize::new(0);
+            std::thread::scope(|s| {
+                for _ in 0..8 {
+                    s.spawn(|| loop {
+                        let i = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        let Some(&t) = order.get(i) else { break };
+                        *got[t].lock().unwrap() = Some(fr.get(t as i64).data.clone());
+                    });
+                }
+            });
+            let mad = |a: &[u8], b: &[u8]| if a.len() != b.len() { f64::NAN } else { a.iter().zip(b).map(|(&p, &q)| (p as i32 - q as i32).unsigned_abs() as f64).sum::<f64>() / a.len() as f64 };
+            let (mut worst, mut wrong_time, mut rows) = (0f64, vec![], vec![]);
+            for t in 0..n {
+                let g = got[t].lock().unwrap().take().unwrap();
+                let own = mad(&g, &jpgs[t]);
+                let best = (t.saturating_sub(2)..(t + 3).min(n)).map(|u| (mad(&g, &jpgs[u]), u)).min_by(|a, b| a.0.total_cmp(&b.0)).unwrap();
+                worst = worst.max(own);
+                if best.1 != t || !own.is_finite() {
+                    wrong_time.push(json!({"t": t, "own": own, "best": best.1, "best_mad": best.0}));
+                }
+                rows.push(own);
+            }
+            let mean = rows.iter().sum::<f64>() / n as f64;
+            println!("{}", json!({"frames": n, "mean_mad": mean, "worst_mad": worst, "wrong_time": wrong_time, "counts": fr.counts()}));
+        }
         "seek-bench" => {
             // seek latency: seek(t) + next() to slot t's frame, at N spread-out slots (a fixed pseudo-random order)
             let mut d = mm_media::Decoder::open(&a[2])?;

@@ -428,7 +428,7 @@ fn stamp(p: &Path) -> Option<(std::time::SystemTime, u64)> {
 }
 
 impl Records {
-    /// Open a project folder (PROJECT/proto_tracks.json, mats_v2.npy, meta.json, edits.json, frames/).
+    /// Open a project folder (PROJECT/proto_tracks.json, mats_v2.npy, meta.json, edits.json; frames from its video).
     pub fn open(work: &Path, opts: Options) -> Result<Records> {
         let proj = Project::load(work)?;
         let edits = proj.read_edits()?;
@@ -436,8 +436,8 @@ impl Records {
         if let Some(name) = opts.depth.as_deref() {
             let cached = ["json", "mp4"].iter().all(|e| work.join("dets").join(format!("depth_{name}.{e}")).exists());
             if cached {
-                let f0 = mm_vision::jpeg::read_bgr(&work.join("frames").join("00000.jpg")).context("frames/00000.jpg")?;
-                let d = DP::Depth::open_cache(work, name, (f0.h, f0.w), |p| {
+                let f0 = mm_media::frames::ScanFrames::for_project(work)?.sized(1, 0).get(0);
+                let d = DP::Depth::open_cache(work, name, (f0.rows, f0.cols), |p| {
                     Box::new(mm_media::grey::MovieLuma { path: p.to_path_buf(), fps: DP::MOVIE_FPS })
                 })
                 .map_err(|e| anyhow!(e))?;
@@ -475,7 +475,12 @@ impl Records {
         let snap: Vec<(String, BTreeMap<i64, [f64; 3]>)> = self.proj.auto.iter().map(|t| (t.id.clone(), t.cover.iter().copied().collect())).collect();
         let work = self.proj.work.clone();
         std::thread::spawn(move || {
-            let r = Lighting::new(&snap, &work.join("frames"), &work, None).map_err(|e| e.to_string());
+            let r = (|| -> Result<Lighting> {
+                let frames = mm_media::frames::ScanFrames::for_project(&work)?.sized(6, 512 << 20);
+                let n = mm_core::pyjson::load(&work.join("meta.json")).map_err(|e| anyhow!(e))?.get("frames").as_i64().unwrap_or(0).max(0) as usize;
+                Lighting::new(&snap, &frames, n, &work, None)
+            })()
+            .map_err(|e| e.to_string());
             if let Err(e) = &r {
                 eprintln!("lighting estimate failed: {e}");
             }

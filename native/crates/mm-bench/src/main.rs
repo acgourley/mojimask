@@ -114,8 +114,10 @@ struct Cfg {
 }
 
 impl Cfg {
+    /// base_video: scanned with the frames read from the video (2026-11-20; base_native's depth was made from
+    /// PROJECT/frames' JPEGs).
     fn base_name(&self) -> &'static str {
-        "base_native"
+        "base_video"
     }
     fn tool_args(&self) -> Vec<String> {
         vec!["--depth".into(), DEPTH.into(), "--models".into(), self.places.models().display().to_string()]
@@ -159,6 +161,13 @@ impl Cfg {
             std::fs::remove_dir_all(&run)?;
         }
         copy_tree(&base, &run)?;
+        // the run reads its frames from the clip in this checkout (a base can outlive the worktree that scanned it)
+        let mp = run.join("meta.json");
+        let mut meta = mm_core::pyjson::load(&mp).map_err(|e| anyhow!(e))?;
+        if let Some(d) = meta.as_dict_mut() {
+            d.insert("video", Py::Str(std::fs::canonicalize(self.places.clip(clip)?)?.display().to_string()));
+        }
+        std::fs::write(&mp, meta.dumps())?;
         let t0 = Instant::now();
         let out = self.run_tool(&["decide".into(), run.display().to_string()])?;
         let secs = py_round1(t0.elapsed().as_secs_f64());

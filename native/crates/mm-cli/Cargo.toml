@@ -10,6 +10,7 @@ name = "mm-cli"
 path = "src/main.rs"
 
 [dependencies]
+mm-media.workspace = true
 mm-app = { workspace = true }
 mm-core.workspace = true
 mm-engine.workspace = true

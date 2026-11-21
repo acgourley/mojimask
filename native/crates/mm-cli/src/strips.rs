@@ -64,8 +64,10 @@ pub fn write(proj: &Path, meta_w: f64, q: &Py, dir: &Path) -> Result<Py, String>
 
 /// The scanned frame and the scale from video pixels (the boxes') to its own.
 fn frame(proj: &Path, t: i64, meta_w: f64) -> Result<(RgbImage, f64), String> {
-    let p = proj.join(format!("frames/{t:05}.jpg"));
-    let img = image::open(&p).map_err(|e| format!("{}: {e}", p.display()))?.to_rgb8();
+    // the scan's picture of frame t, from the project's video
+    let m = mm_media::frames::ScanFrames::for_project(proj).and_then(|f| f.sized(1, 0).try_get(t)).map_err(|e| format!("frame {t}: {e:#}"))?;
+    let rgb: Vec<u8> = m.data.chunks_exact(3).flat_map(|p| [p[2], p[1], p[0]]).collect();
+    let img = RgbImage::from_raw(m.cols as u32, m.rows as u32, rgb).ok_or("frame size")?;
     let k = if meta_w > 0.0 { img.width() as f64 / meta_w } else { 1.0 };
     Ok((img, k))
 }

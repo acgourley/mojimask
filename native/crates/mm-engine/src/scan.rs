@@ -179,7 +179,8 @@ fn preview(frame: &Mat<u8>, found: &[Boxes; 3]) -> Vec<u8> {
 fn meta_for(video: &str, proj: &Path) -> Result<(Dict, mm_media::Probe)> {
     let old = proj.join("meta.json");
     let old = if old.exists() { mm_core::pyjson::load(&old).map_err(|e| anyhow!(e))? } else { Py::Dict(Dict::new()) };
-    let have_frames = proj.join("frames/00000.jpg").exists();
+    // scanned before: meta.json counts its frames (projects from before 2026-11-20 also have frames/)
+    let have_frames = old.get("frames").as_i64().is_some() || proj.join("frames/00000.jpg").exists();
     let keep_fps = if have_frames { old.get("fps").as_f64() } else { None };
     let p = mm_media::probe(video, keep_fps)?;
     let mut m = Dict::new();
@@ -240,17 +241,16 @@ pub struct DetectStats {
     pub camera_seconds: Option<f64>,
 }
 
-/// prepare + detect (pipeline.run's first two steps). Writes frames/, dets/, preview.jpg, meta.json.
+/// prepare + detect (pipeline.run's first two steps). Writes dets/, preview.jpg, meta.json. Until 2026-11-20 it also
+/// wrote every frame to frames/NNNNN.jpg; later steps now read the video (mm_media::frames).
 pub fn prepare_and_detect(video: &str, proj: &Path, o: &Options, report: Report) -> Result<DetectStats> {
     mm_media::decode::init();
-    std::fs::create_dir_all(proj.join("frames"))?;
     std::fs::create_dir_all(proj.join("dets"))?;
     let (mut meta, probe) = meta_for(video, proj)?;
     write_meta(proj, &meta)?;
     report("prepare", 0.0, Py::Dict(meta.clone()).to_serde());
-    let have_frames = proj.join("frames/00000.jpg").exists();
 
-    // one decode pass: frames for the detectors, and the JPEGs when the project has none yet
+    // one decode pass: frames for the detectors
     let (ftx, frx) = mpsc::sync_channel::<Result<Arc<Mat<u8>>>>(6);
     let v = video.to_string();
     let decoder = std::thread::Builder::new().name("scan-decode".into()).spawn(move || {
@@ -273,16 +273,6 @@ pub fn prepare_and_detect(video: &str, proj: &Path, o: &Options, report: Report)
         if let Err(e) = run() {
             let _ = ftx.send(Err(e));
         }
-    })?;
-    let (jtx, jrx) = mpsc::channel::<(usize, Arc<Mat<u8>>)>();
-    let fdir = proj.join("frames");
-    let writer = std::thread::Builder::new().name("scan-jpeg".into()).spawn(move || -> Result<usize> {
-        let mut n = 0;
-        for (t, f) in jrx {
-            std::fs::write(fdir.join(format!("{t:05}.jpg")), jpeg::encode_bgr(&f.data, f.cols, f.rows, 90))?;
-            n += 1;
-        }
-        Ok(n)
     })?;
 
     // reading the video and detecting are one pass here, so "prepare" ends where detecting starts (as pipeline.py
@@ -339,9 +329,6 @@ pub fn prepare_and_detect(video: &str, proj: &Path, o: &Options, report: Report)
     let mut last: Option<(Arc<Mat<u8>>, [Boxes; 3])> = None;
     for f in sample.into_iter().map(Ok).chain(it) {
         let f = f?;
-        if !have_frames {
-            let _ = jtx.send((t, f.clone()));
-        }
         if camera.is_some() {
             let _ = ctx.send(f.clone());
         }
@@ -360,7 +347,6 @@ pub fn prepare_and_detect(video: &str, proj: &Path, o: &Options, report: Report)
         last = Some((f, found));
         t += 1;
     }
-    drop(jtx);
     drop(ctx);
     decoder.join().map_err(|_| anyhow!("decoder thread"))?;
     let mut camera_s = None;
@@ -369,17 +355,10 @@ pub fn prepare_and_detect(video: &str, proj: &Path, o: &Options, report: Report)
         cam.save(&proj.join("mats_v2.npy"))?;
         camera_s = Some(secs);
     }
-    let written = writer.join().map_err(|_| anyhow!("jpeg thread"))??;
     if let Some((f, found)) = &last {
         write_atomic(&proj.join("preview.jpg"), &preview(f, found))?;
     }
-    let n = if have_frames { std::fs::read_dir(proj.join("frames"))?.filter(|e| e.as_ref().is_ok_and(|e| e.file_name().to_string_lossy().ends_with(".jpg"))).count() } else { written };
-    // the decoder gave fewer frames than the JPEGs: pad with empty results (pipeline.py)
-    for o in out.iter_mut() {
-        while o.len() < n {
-            o.push(vec![]);
-        }
-    }
+    let n = t;
     let secs = t0.elapsed().as_secs_f64();
     // pipeline.py's key order: ..., frames, engine
     let engine = meta.remove("engine");
@@ -409,7 +388,7 @@ pub fn decide(proj: &Path, o: &Options) -> Result<(Dict, mm_scan::newalgo::Stage
 /// [`decide`], each viz event also handed to `sink` as it happens (the app's "Deciding who's who" animation).
 pub fn decide_with(proj: &Path, o: &Options, sink: Option<Box<dyn FnMut(&Py)>>) -> Result<(Dict, mm_scan::newalgo::Stages, mm_scan::viz::Viz, serde_json::Value)> {
     use crate::evidence as ev;
-    let frames = Arc::new(ev::Frames::new(proj));
+    let frames = Arc::new(ev::Frames::for_project(proj)?);
     let f0 = frames.get(0);
     let models = ev::models(&o.models.join("onnx"), o.analysis_cpu, o.cache.as_ref().map(|c| c.join("analysis")));
     let mut faces = ev::RealFaces::new(frames.clone(), models.clone(), Some(proj));
@@ -466,6 +445,7 @@ pub fn decide_with(proj: &Path, o: &Options, sink: Option<Box<dyn FnMut(&Py)>>) 
         "seconds": secs,
         "faces_prefetch_seconds": prefetch_s,
         "stage_seconds": stages.seconds.iter().map(|(k, s)| (k.to_string(), serde_json::json!((s * 100.0).round() / 100.0))).collect::<serde_json::Map<_, _>>(),
+        "frames": frames.counts(),
         "motion_replay [boundary, recorded, used]": usage.map(|u| u.report()),
     });
     Ok((res, stages, viz, info))

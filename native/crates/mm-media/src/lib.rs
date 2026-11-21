@@ -9,6 +9,7 @@
 //! - [`convert`]: a frame as video_io's BGR picture on the CPU (display colour as AVFoundation converts it: on the
 //!   Mac through VideoToolbox's pixel transfer, exactly; detect colour as the detectors were tuned on; anamorphic
 //!   resize, upright).
+//! - [`frames`]: the scan's frames straight from the video (detect colour), a decoder pool and a cache.
 //! - [`grey`]: grey data movies (the depth cache): the writer (AVAssetWriter, as video_io.writer) and the Y planes back.
 //! - [`photo`]: photos (one-frame clips) through ImageIO; [`formats`]: export presets and fit geometry;
 //!   [`mp4`]: the movie's boxes (probe) and the export's final file (audio with priming, metadata).
@@ -20,6 +21,7 @@ pub mod convert;
 pub mod decode;
 pub mod export;
 pub mod formats;
+pub mod frames;
 pub mod grey;
 pub mod import;
 pub mod mp4;

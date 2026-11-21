@@ -12,7 +12,8 @@
 //! SCAN_VERSION: box ids, and so every fact a person records about them (facts.py), belong to the scan that made
 //! them: a rescan throws the project's facts away. Raise it whenever a change to the scan could renumber or reshape
 //! boxes; a project made with another version is rescanned (losing its answers), not patched. (2: graph's position
-//! rules need heads of about the same size, SPOT_SIZE.)
+//! rules need heads of about the same size, SPOT_SIZE. 3, 2026-11-20: the evidence reads frames from the video, not
+//! the JPEG copies in PROJECT/frames, so joins, covers and tracks can come out differently: jazz proto_tracks 196 -> 202.)
 //!
 //! settle, the last pass once covers exist: open questions whose answer can't change the video are settled by a rule.
 //!   too small    the box is under TINY_PX: kept covered (no one could tell from it anyway). TINY_PX: head box at its
@@ -39,7 +40,7 @@ use crate::viz::Viz;
 use mm_core::pyjson::{self, py_round, Dict, Py};
 use std::path::Path;
 
-pub const SCAN_VERSION: i64 = 2;
+pub const SCAN_VERSION: i64 = 3;
 pub const TINY_PX: f64 = 24.0;
 pub const INSIDE: f64 = 0.8;
 pub const COVERED_BY_ANOTHER: &str = "covered by another box";

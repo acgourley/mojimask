@@ -36,7 +36,7 @@ pub struct Follower {
 }
 
 pub fn make(cfg: &Cfg, auto: Arc<Vec<Track>>, poses: Arc<Vec<Vec<Vec<f64>>>>, _n: usize, w: usize, h: usize) -> Box<dyn Follow + Send> {
-    let flow = NativeMotion::new(Arc::new(crate::evidence::Frames::new(&cfg.work)));
+    let flow = NativeMotion::new(Arc::new(crate::evidence::Frames::for_project(&cfg.work).expect("the project's meta.json")));
     let spec: Vec<(&str, f64)> = mm_scan::geom::CORE_DETS.iter().map(|(n, _)| (*n, mm_scan::geom::WEAK_DET)).collect();
     let low = mm_scan::geom::fused_frames(&cfg.work.join("dets"), &spec).unwrap_or_default();
     Box::new(Follower {

@@ -1,6 +1,7 @@
 //! The scan's evidence from pixels, measured in Rust: mm-scan's `FaceEvidence`, `Appearance` and `Depth` traits on
-//! mm-analysis, reading the project's frames as the Python scan does (`cv2.imread(PROJECT/frames/NNNNN.jpg)`, here
-//! [`crate::jpeg`], bit-identical).
+//! mm-analysis, reading the project's frames straight from its video in the detect colour (the detectors' own pixels;
+//! [`Frames`], mm_media::frames). Until 2026-11-20 they were read from PROJECT/frames/NNNNN.jpg as the Python scan's
+//! cv2.imread did.
 //!
 //! Kept from Python:
 //! - **faces** (scan/faces.py `face`, follow.py `face_near`): RetinaFace landmarks on the head crop (reid.face_crop),
@@ -34,33 +35,8 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::{Arc, Mutex};
 
-/// The project's frames, decoded as cv2.imread does, a few hundred kept.
-pub struct Frames {
-    dir: PathBuf,
-    cache: Mutex<(HashMap<i64, Arc<Mat<u8>>>, std::collections::VecDeque<i64>)>,
-}
-
-impl Frames {
-    pub fn new(proj: &Path) -> Frames {
-        Frames { dir: proj.join("frames"), cache: Mutex::new((HashMap::new(), Default::default())) }
-    }
-    pub fn get(&self, t: i64) -> Arc<Mat<u8>> {
-        if let Some(m) = self.cache.lock().unwrap().0.get(&t) {
-            return m.clone();
-        }
-        let d = crate::jpeg::read_bgr(&self.dir.join(format!("{t:05}.jpg"))).unwrap_or_else(|e| panic!("frame {t}: {e}"));
-        let m = Arc::new(Mat::from_vec(d.h, d.w, 3, d.data));
-        let mut c = self.cache.lock().unwrap();
-        if c.1.len() > 256 {
-            if let Some(o) = c.1.pop_front() {
-                c.0.remove(&o);
-            }
-        }
-        c.0.insert(t, m.clone());
-        c.1.push_back(t);
-        m
-    }
-}
+/// The project's frames: slot t's picture straight from the video, in the detect colour (mm_media::frames).
+pub use mm_media::frames::ScanFrames as Frames;
 
 fn face_m(f: afaces::Face) -> FaceM {
     FaceM { score: f.score, yaw: f.yaw, eyes: f.eyes, px: f.px, emb: f.emb }
@@ -114,7 +90,8 @@ pub struct RealFaces {
 }
 
 pub const FACE_CACHE: &str = "faces_native.json";
-const FACE_CACHE_VERSION: i64 = 1;
+/// 2 (2026-11-20): measured on the video's frames; version 1's were measured on PROJECT/frames' JPEG copies.
+const FACE_CACHE_VERSION: i64 = 2;
 
 impl RealFaces {
     /// `proj`: where the cache lives (proto/faces_native.json); None: no cache.
@@ -366,12 +343,11 @@ pub fn ncc(a: &[f32], b: &[f32]) -> f64 {
 
 /// The follower's motion evidence from mm-motion (our own motion, not cv2's corners, LK and RANSAC): flow and
 /// face_motion from `head::head_motion` (with follow.CORE and follow.FLOW_CORE), trackable from `head::trackable`,
-/// looks from follow.patch + follow.ncc ported exactly. Frames are Clip.gray's: cv2.imread of PROJECT/frames, then
+/// looks from follow.patch + follow.ncc ported exactly. Frames are the video's (Frames::grey:
 /// cv2.cvtColor(BGR2GRAY) (mm-vision, exact). The same swap as tools/parity/motion_bench.py's "ours_follow" variant
 /// (flow's move rounded to float32, as cv2's points are). Answers are cached by their arguments.
 pub struct NativeMotion {
     frames: Arc<Frames>,
-    gray: Mutex<(HashMap<i64, Arc<Mat<u8>>>, std::collections::VecDeque<i64>)>,
     heads: Mutex<HashMap<String, mm_motion::head::HeadMotion>>,
     trk: Mutex<HashMap<(i64, i64), f64>>,
     params: mm_motion::head::HeadParams,
@@ -381,7 +357,6 @@ impl NativeMotion {
     pub fn new(frames: Arc<Frames>) -> NativeMotion {
         NativeMotion {
             frames,
-            gray: Mutex::new((HashMap::new(), Default::default())),
             heads: Mutex::new(HashMap::new()),
             trk: Mutex::new(HashMap::new()),
             params: Default::default(),
@@ -389,19 +364,7 @@ impl NativeMotion {
     }
 
     pub fn gray(&self, t: i64) -> Arc<Mat<u8>> {
-        if let Some(g) = self.gray.lock().unwrap().0.get(&t) {
-            return g.clone();
-        }
-        let g = Arc::new(mm_vision::bgr2gray(&self.frames.get(t)));
-        let mut c = self.gray.lock().unwrap();
-        if c.1.len() > 256 {
-            if let Some(o) = c.1.pop_front() {
-                c.0.remove(&o);
-            }
-        }
-        c.0.insert(t, g.clone());
-        c.1.push_back(t);
-        g
+        self.frames.grey(t)
     }
 
     fn head(&self, t0: i64, t1: i64, c: &Cs, core: [f64; 4]) -> mm_motion::head::HeadMotion {
@@ -491,3 +454,4 @@ impl NativeCamera {
 pub fn models(models_dir: &Path, cpu: bool, cache: Option<PathBuf>) -> Arc<Models> {
     Arc::new(Models::new(models_dir, if cpu { Engines::cpu() } else { Engines::default_plan() }, cache))
 }
+

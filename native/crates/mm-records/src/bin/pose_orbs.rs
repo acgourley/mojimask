@@ -85,7 +85,7 @@ fn main() -> anyhow::Result<()> {
     let name = proj.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "project".into());
     let out = out.unwrap_or_else(|| PathBuf::from("out/native/pose_orbs").join(&name));
     std::fs::create_dir_all(&out)?;
-    let frames_dir = proj.join("frames");
+    let frames_dir = mm_media::frames::ScanFrames::for_project(&proj)?.sized(2, 512 << 20);
 
     let pf: serde_json::Value = {
         let pj = proj.join("dets/pose_full.json");

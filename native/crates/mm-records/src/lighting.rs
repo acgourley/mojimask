@@ -50,6 +50,7 @@
 //!
 //! The caches have Python's names and contents ([`crate::npz`]): film_est_{n}_{size}_{mtime}.npz (colour, black)
 //! and light_est_{md5[:12]}.npz (cast, mean, white, probe), so either side reads the other's.
+use mm_media::frames::ScanFrames;
 use crate::npz::{self, F64Array, Member, Pickled};
 use anyhow::{anyhow, Result};
 use md5::{Digest, Md5};
@@ -216,10 +217,10 @@ pub struct Frame {
 }
 
 impl Frame {
-    pub fn read(frames_dir: &Path, t: usize) -> Result<Frame> {
-        let p = frames_dir.join(format!("{t:05}.jpg"));
-        let d = mm_vision::jpeg::read_bgr(&p).map_err(|e| anyhow!("lighting: can't read frame {}: {e}", p.display()))?;
-        Ok(Frame { w: d.w, h: d.h, bgr: d.data })
+    /// Slot t of the project's video (detect colour, mm_media::frames; until 2026-11-20 PROJECT/frames/NNNNN.jpg).
+    pub fn read(frames: &ScanFrames, t: usize) -> Result<Frame> {
+        let m = frames.get(t as i64);
+        Ok(Frame { w: m.cols, h: m.rows, bgr: m.data.clone() })
     }
 }
 
@@ -507,22 +508,16 @@ fn probe_from_pickle(v: &Pickled) -> Result<Probe> {
 }
 
 impl Lighting {
-    /// lighting.Lighting(snap, frames_dir, cache_dir, progress).
-    pub fn new(snap: &[(String, BTreeMap<i64, [f64; 3]>)], frames_dir: &Path, cache_dir: &Path, progress: Option<&(dyn Fn(f64) + Sync)>) -> Result<Lighting> {
-        let n = std::fs::read_dir(frames_dir)?
-            .filter_map(|e| e.ok())
-            .filter(|e| e.file_name().to_string_lossy().ends_with(".jpg"))
-            .count();
-        // film: independent of the tracks, but not of the frames (the first frame's size and time are in the name)
-        let tag = if n > 0 {
-            let md = std::fs::metadata(frames_dir.join("00000.jpg"))?;
-            let mt = md.modified()?.duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs_f64()).unwrap_or(0.0);
-            format!("{n}_{}_{}", md.len(), mt as i64)
-        } else {
-            format!("{n}")
-        };
+    /// lighting.Lighting(snap, frames_dir, cache_dir, progress), on the project's `n` frames from its video.
+    pub fn new(snap: &[(String, BTreeMap<i64, [f64; 3]>)], frames: &ScanFrames, n: usize, cache_dir: &Path, progress: Option<&(dyn Fn(f64) + Sync)>) -> Result<Lighting> {
+        // film: independent of the tracks, but not of the frames (the video's size and time are in the name). Both
+        // names end in "_v" since the frames come from the video, not the JPEGs (2026-11-20): the older caches were
+        // measured on JPEG copies, so they're measured again
+        let md = std::fs::metadata(frames.video())?;
+        let mt = md.modified()?.duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs_f64()).unwrap_or(0.0);
+        let tag = format!("{n}_{}_{}_v", md.len(), mt as i64);
         let film_cache = cache_dir.join(format!("film_est_{tag}.npz"));
-        let light_cache = cache_dir.join(format!("light_est_{}.npz", snap_key(snap)));
+        let light_cache = cache_dir.join(format!("light_est_{}_v.npz", snap_key(snap)));
         let film = if film_cache.exists() {
             let z = npz::load(&film_cache)?;
             Some((get_f64(&z, "colour")?.data, get_f64(&z, "black")?.data))
@@ -539,7 +534,7 @@ impl Lighting {
         } else {
             None
         };
-        let (film, scene) = Self::measure(snap, frames_dir, n, film, scene, progress)?;
+        let (film, scene) = Self::measure(snap, frames, n, film, scene, progress)?;
         if !film_cache.exists() {
             std::fs::create_dir_all(cache_dir)?;
             npz::save(&film_cache, &[("colour", arr1(&film.0)), ("black", arr1(&film.1))])?;
@@ -611,7 +606,7 @@ impl Lighting {
     #[allow(clippy::type_complexity)]
     fn measure(
         snap: &[(String, BTreeMap<i64, [f64; 3]>)],
-        frames_dir: &Path,
+        frames: &ScanFrames,
         n: usize,
         film: Option<(Vec<f64>, Vec<f64>)>,
         scene: Option<(Vec<[f64; 3]>, Vec<[f64; 3]>, Vec<f64>, Probe)>,
@@ -647,7 +642,7 @@ impl Lighting {
                         break;
                     }
                     let row = (|| -> Result<Row> {
-                        let f = Frame::read(frames_dir, t)?;
+                        let f = Frame::read(frames, t)?;
                         let l = luminance(&f);
                         let fs = want_film.then(|| film_stats(&f, &l));
                         let ss = want_scene.then(|| {

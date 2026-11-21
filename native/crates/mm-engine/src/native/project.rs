@@ -48,6 +48,8 @@ pub struct Proj {
     follow: Mutex<Option<Box<dyn Follow + Send>>>,
     follow_cfg: follow::Cfg,
     pub looks: whose::Looks,
+    /// the project's frames from its video, for the app's pictures and whose (a few kept)
+    pub frames: Arc<mm_media::frames::ScanFrames>,
     yours: Mutex<Option<((i64, Vec<i64>), Vec<Py>)>>,
     depth_on: bool,
     dev: bool,
@@ -163,6 +165,10 @@ impl Proj {
             follow: Mutex::new(None),
             follow_cfg: follow::Cfg::new(&srv.cfg.scan, work),
             looks: whose::Looks::default(),
+            frames: Arc::new(match mm_media::frames::ScanFrames::for_project(work) {
+                Ok(f) => f.sized(2, 1 << 30),
+                Err(_) => mm_media::frames::ScanFrames::open("", 1, 0), // no video named: every picture fails
+            }),
             yours: Mutex::new(None),
             depth_on,
             dev: srv.cfg.dev,
@@ -336,9 +342,10 @@ impl Proj {
             _ => {}
         }
         if let Some(name) = path.strip_prefix("/api/frames/") {
-            let ok = name.len() == 9 && name.ends_with(".jpg") && name[..5].bytes().all(|b| b.is_ascii_digit());
-            let b = ok.then(|| std::fs::read(self.work.join("frames").join(name)).ok()).flatten().ok_or_else(|| Fail(404, "no such frame".into()))?;
-            return Ok(Reply::bytes("image/jpeg", b));
+            // the frame from the video (detect colour, as the scan saw it), as a JPEG: the Decisions page's pictures
+            let t = (name.len() == 9 && name.ends_with(".jpg") && name[..5].bytes().all(|b| b.is_ascii_digit())).then(|| name[..5].parse::<i64>().ok()).flatten();
+            let m = t.and_then(|t| self.frames.try_get(t).ok()).ok_or_else(|| Fail(404, "no such frame".into()))?;
+            return Ok(Reply::bytes("image/jpeg", mm_vision::jpeg::encode_bgr(&m.data, m.cols, m.rows, 90)));
         }
         if let Some(t) = path.strip_prefix("/api/pose/") {
             return Ok(Reply::json(&self.pose_frame(clamp(t)?)));

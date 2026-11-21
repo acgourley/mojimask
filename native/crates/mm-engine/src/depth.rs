@@ -47,7 +47,7 @@ pub fn models(models_dir: &Path, cpu: bool, cache: Option<PathBuf>) -> Models {
     m
 }
 
-/// depth.compute(proj, name): nearness for every frame of PROJECT/frames, cached as a grey movie + sidecar. Does
+/// depth.compute(proj, name): nearness for every frame of the project's video (detect colour, mm_media::frames), cached as a grey movie + sidecar. Does
 /// nothing when the cache exists. `progress(fraction)` while computing. `models`: [`models`].
 pub fn compute(proj: &Path, name: &str, models: &Models, models_dir: &Path, progress: &mut dyn FnMut(f64)) -> Result<()> {
     let (movie, side_p) = cache_paths(proj, name);
@@ -63,13 +63,11 @@ pub fn compute(proj: &Path, name: &str, models: &Models, models_dir: &Path, prog
     if !model_path.exists() {
         return Err(anyhow!("MOJIMASK_DEPTH={name}: {} is missing (models/README.md says where it comes from)", model_path.display()));
     }
-    let mut frames: Vec<String> = std::fs::read_dir(proj.join("frames"))?
-        .filter_map(|e| e.ok().map(|e| e.file_name().to_string_lossy().to_string()))
-        .filter(|f| f.ends_with(".jpg"))
-        .collect();
-    frames.sort();
-    if frames.is_empty() {
-        return Err(anyhow!("depth {name}: no frames in {}/frames", proj.display()));
+    // every frame in order, from the video (one decoder, a few frames kept)
+    let frames = mm_media::frames::ScanFrames::for_project(proj)?.sized(1, 256 << 20);
+    let n = mm_core::pyjson::load(&proj.join("meta.json")).map_err(|e| anyhow!(e))?.get("frames").as_i64().unwrap_or(0).max(0) as usize;
+    if n == 0 {
+        return Err(anyhow!("depth {name}: no frames in {}/meta.json", proj.display()));
     }
     let tmp = PathBuf::from(format!("{}.tmp.mp4", movie.display()));
     let side_tmp = PathBuf::from(format!("{}.tmp", side_p.display()));
@@ -78,13 +76,11 @@ pub fn compute(proj: &Path, name: &str, models: &Models, models_dir: &Path, prog
         let mut shape = (0, 0);
         let mut info = vec![];
         let mut samples: Vec<Vec<f32>> = vec![];
-        let n = frames.len();
         let (mut t_read, mut t_model, mut t_write) = (0f64, 0f64, 0f64);
         let t_all = std::time::Instant::now();
-        for (i, f) in frames.iter().enumerate() {
+        for i in 0..n {
             let tt = std::time::Instant::now();
-            let img = crate::jpeg::read_bgr(&proj.join("frames").join(f))?;
-            let img = mm_vision::Mat::from_vec(img.h, img.w, 3, img.data);
+            let img = frames.get(i as i64);
             t_read += tt.elapsed().as_secs_f64();
             let tt = std::time::Instant::now();
             let d = adepth::run_onnx(models, &model_path, &img, None);
@@ -133,8 +129,8 @@ pub fn compute(proj: &Path, name: &str, models: &Models, models_dir: &Path, prog
             eprintln!("depth: read {t_read:.1} s, model {t_model:.1} s, encode+write {t_write:.1} s, loop {:.1} s, read back + fit {:.1} s",
                       t_all.elapsed().as_secs_f64() - t_back.elapsed().as_secs_f64(), t_back.elapsed().as_secs_f64());
         }
-        if fit.len() != frames.len() {
-            return Err(anyhow!("depth movie: wrote {} frames, read back {}", frames.len(), fit.len()));
+        if fit.len() != n {
+            return Err(anyhow!("depth movie: wrote {} frames, read back {}", n, fit.len()));
         }
         let side = adepth::Sidecar {
             model: name.to_string(),

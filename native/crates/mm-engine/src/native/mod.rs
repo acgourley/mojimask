@@ -471,7 +471,8 @@ impl Server {
             return Err(Fail(400, "t, x, y, s".into()));
         };
         let px = q.get("px").and_then(|v| v.parse::<i64>().ok()).unwrap_or(96).clamp(16, 256) as usize;
-        let im = mm_vision::jpeg::read_bgr(&d.join("frames").join(format!("{t:05}.jpg"))).map_err(|_| Fail(404, "no frame".into()))?;
+        let im = mm_media::frames::ScanFrames::for_project(d).and_then(|f| f.sized(1, 0).try_get(t)).map_err(|_| Fail(404, "no frame".into()))?;
+        let im = mm_vision::jpeg::Decoded { w: im.cols, h: im.rows, channels: 3, data: im.data.clone() };
         let w = im.w as f64;
         let r = (s * w * 0.7).max(4.0);
         let k = px as f64 / (2.0 * r);

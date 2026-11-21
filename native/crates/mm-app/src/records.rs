@@ -151,13 +151,14 @@ fn fetch_native(srv: &Arc<mm_engine::native::Server>, pid: &str, style: Option<&
     })
 }
 
-/// Frame t of a project drawn as the export draws it, on the project's own JPEG (review_server.preview_frame, for
+/// Frame t of a project drawn as the export draws it, on the scan's picture of it (from the video) (review_server.preview_frame, for
 /// /api/thumb): (w, h, BGR).
 pub fn draw_project_frame(sh: &Shared, pid: &str, t: usize, style: &str) -> Result<(usize, usize, Vec<u8>)> {
     let sc = sidecar(sh)?;
     let srv = sc.native().ok_or_else(|| anyhow!("not the native engine"))?;
     let p = srv.project(pid).map_err(|f| anyhow!("{pid}: {}", f.1))?;
-    let d = mm_vision::jpeg::read_bgr(&p.work.join("frames").join(format!("{t:05}.jpg")))?;
+    let m = p.frames.try_get(t as i64)?;
+    let d = mm_vision::jpeg::Decoded { w: m.cols, h: m.rows, channels: 3, data: m.data.clone() };
     let recs = fetch_native(&srv, pid, Some(style), false, false)?;
     let g = mm_render::Gpu::headless()?;
     let (device, queue) = (&g.device, &g.queue);

@@ -54,13 +54,10 @@ impl Clip {
             return Err(format!("mats_v2.npy: shape {shape:?}"));
         }
         let mats = v.chunks_exact(6).map(|m| [[m[0], m[1], m[2]], [m[3], m[4], m[5]]]).collect();
-        let n = std::fs::read_dir(proj.join("frames"))
-            .map_err(|e| format!("frames: {e}"))?
-            .filter_map(|e| e.ok())
-            .filter(|e| e.file_name().to_string_lossy().ends_with(".jpg"))
-            .count() as i64;
-        // the frame size: Python reads frame 0's shape; the project's meta.json records the same size
+        // the frame count and size from meta.json (the detect step records them; Python counted PROJECT/frames and
+        // read frame 0's shape, the same numbers)
         let meta = mm_core::pyjson::load(&proj.join("meta.json"))?;
+        let n = meta.get("frames").as_i64().ok_or("meta: frames")?;
         let (w, h) = (meta.get("width").as_f64().ok_or("meta: width")?, meta.get("height").as_f64().ok_or("meta: height")?);
         Ok(Clip { mats, n, w, h })
     }

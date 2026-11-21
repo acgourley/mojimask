@@ -28,6 +28,13 @@ pub fn video_to_full_range(y: u8) -> u8 {
 pub fn luma(path: &Path, fps: f64, start: usize, count: Option<usize>) -> Result<Vec<(usize, Mat<u8>)>> {
     crate::decode::init();
     let mut d = crate::Decoder::open(&path.to_string_lossy())?;
+    // Seek to `start` rather than decode from frame 0: Depth::full reads CHUNK frames at a time, so reading from 0
+    // made the editor and Export decode the whole movie up to each chunk (party4k, 1491 frames: 13.1 s to read it
+    // chunk by chunk against 0.36 s whole). The decoder's accurate seek decodes from the keyframe before `start`
+    // (MOVIE_KEYFRAMES apart) and hands out the same bytes (`mm-media-parity luma-chunks`: 0 wrong frames).
+    if start > 0 {
+        d.seek(start)?;
+    }
     let mut out = vec![];
     while let Some(f) = d.pull_frame()? {
         let i = (f.pts * fps).round_ties_even() as usize;
