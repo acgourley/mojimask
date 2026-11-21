@@ -59,7 +59,7 @@ pub fn evidence(rec: &Path, proj: &Path, o: &Options, only: Option<&str>) -> ser
     let frames = Arc::new(ev::Frames::new(proj));
     let models = ev::models(&o.models.join("onnx"), o.analysis_cpu, o.cache.as_ref().map(|c| c.join("analysis")));
     let faces = ev::RealFaces::new(frames.clone(), models.clone(), None);
-    let mut body = ev::RealBody { frames: frames.clone(), models: models.clone() };
+    let body = ev::RealBody { frames: frames.clone(), models: models.clone() };
     let mut out = serde_json::Map::new();
     let want = |k: &str| only.is_none_or(|o| o.split(',').any(|x| x == k));
     if want("face") {

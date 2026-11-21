@@ -54,10 +54,10 @@ pub trait FaceEvidence: Send + Sync {
 
 pub trait Appearance: Send + Sync {
     /// appearance.reid_embed of appearance.crop(frame t, body box): the L2-normalised OSNet feature.
-    fn body(&mut self, t: i64, bx: &[f64; 4]) -> Vec<f32>;
+    fn body(&self, t: i64, bx: &[f64; 4]) -> Vec<f32>;
     /// A group's crops in one call (questions._looks runs appearance.reid_embed on them as one batch, and ONNX Runtime's
     /// CPU results depend on the batch a crop runs in). Default: each crop alone.
-    fn bodies(&mut self, crops: &[(i64, [f64; 4])]) -> Vec<Vec<f32>> {
+    fn bodies(&self, crops: &[(i64, [f64; 4])]) -> Vec<Vec<f32>> {
         crops.iter().map(|(t, bx)| self.body(*t, bx)).collect()
     }
 }
@@ -186,7 +186,7 @@ impl FaceEvidence for ReplayFaces {
 }
 
 impl Appearance for ReplayBody {
-    fn body(&mut self, t: i64, bx: &[f64; 4]) -> Vec<f32> {
+    fn body(&self, t: i64, bx: &[f64; 4]) -> Vec<f32> {
         get(&self.body, &self.usage, "body", &[t as f64, bx[0], bx[1], bx[2], bx[3]]).as_list().unwrap().iter().map(|x| x.as_f64().unwrap() as f32).collect()
     }
 }

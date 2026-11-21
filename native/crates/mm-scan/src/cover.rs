@@ -156,7 +156,7 @@ fn cover_blip(clip: &Clip, obs: &IndexMap<i64, Cs>, cv: &mut IndexMap<i64, Cs>, 
 
 /// cover.cover_person: gaps followed from both sides, ends followed outward. Returns the frames where following lost
 /// the face from both sides.
-fn cover_person(clip: &Clip, ev: &mut Evidence, obs: &IndexMap<i64, Cs>, cv: &mut IndexMap<i64, Cs>, low: &[Vec<Fused>], how: &mut Counter)
+fn cover_person(clip: &Clip, ev: &Evidence, obs: &IndexMap<i64, Cs>, cv: &mut IndexMap<i64, Cs>, low: &[Vec<Fused>], how: &mut Counter)
                 -> BTreeSet<i64> {
     let seen = |u: i64, c: &Cs| (u as usize) < low.len() && behind::face_there(c, &low[u as usize]);
     let mut ts: Vec<i64> = obs.keys().copied().collect();
@@ -247,18 +247,29 @@ pub fn build(proj: &Path, st: State, poses: Option<&[Vec<Pose>]>, photo: bool, c
     let mut covers = IndexMap::new();
     let mut how = Counter::default();
     let mut behind_ = IndexMap::new();
-    for (&r, ms) in &st.members {
-        let obs = st.group_obs(ms);
+    // each group's cover is followed on its own thread (join::par_map, results in group order); its counts are kept
+    // apart and added in group order, so `how` comes out as when the groups ran one after another
+    let groups: Vec<(i64, IndexMap<i64, Cs>)> = st.members.iter().map(|(&r, ms)| (r, st.group_obs(ms))).collect();
+    let ev_: &Evidence = ev;
+    let followed = crate::join::par_map(&groups, crate::join::threads(), |(r, obs)| {
+        let ms = &st.members[r];
         let mut keys: Vec<i64> = obs.keys().copied().collect();
         keys.sort();
         let mut cv: IndexMap<i64, Cs> = keys.iter().map(|t| (*t, obs[t])).collect();
-        how.add("detected", cv.len() as i64);
-        let mut lost = if obs.len() < MIN_DET || !st.clear_face(ms) {
-            cover_blip(clip, &obs, &mut cv, st, ms, &mut how);
+        let mut h = Counter::default();
+        let lost = if obs.len() < MIN_DET || !st.clear_face(ms) {
+            cover_blip(clip, obs, &mut cv, st, ms, &mut h);
             BTreeSet::new()
         } else {
-            cover_person(clip, ev, &obs, &mut cv, &low, &mut how)
+            cover_person(clip, ev_, obs, &mut cv, &low, &mut h)
         };
+        (cv, lost, h)
+    });
+    for ((r, obs), (mut cv, mut lost, h)) in groups.into_iter().zip(followed) {
+        how.add("detected", obs.len() as i64);
+        for (k, n) in h.0 {
+            how.add(&k, n);
+        }
         let gone = behind::behind_frames(&cv, &obs, poses_all, &low, ev.depth.as_mut());
         for u in &gone {
             cv.shift_remove(u);
@@ -278,28 +289,28 @@ pub fn build(proj: &Path, st: State, poses: Option<&[Vec<Pose>]>, photo: bool, c
         ]);
         covers.insert(r, cv);
     }
-    let mut flow = IndexMap::new();
-    for (r, cv) in &covers {
-        flow.insert(*r, flows(ev, cv));
-    }
+    let flow = flows(ev, &covers);
     let depth = ev.depth.as_ref().map(|d| d.name().to_string());
     Ok(Built { covers, how, behind: behind_, flow, depth, d })
 }
 
-/// cover.flows: how each cover's head moved to the next frame, where that agrees with the next box.
-fn flows(ev: &mut Evidence, cv: &IndexMap<i64, Cs>) -> BTreeMap<i64, [f64; 4]> {
-    let mut out = BTreeMap::new();
-    let mut ts: Vec<i64> = cv.keys().copied().collect();
-    ts.sort();
-    for t in ts {
-        let Some(n) = cv.get(&(t + 1)) else { continue };
-        let c = cv[&t];
-        let (m, _) = ev.motion.face_motion(t, t + 1, &c);
+/// cover.flows: how each cover's head moved to the next frame, where that agrees with the next box. Every
+/// (cover, frame) step is independent, so the head motions are measured on threads (join::par_map, results in order).
+fn flows(ev: &Evidence, covers: &IndexMap<i64, IndexMap<i64, Cs>>) -> IndexMap<i64, BTreeMap<i64, [f64; 4]>> {
+    let mut steps: Vec<(i64, i64, Cs, Cs)> = vec![];
+    for (r, cv) in covers {
+        let mut ts: Vec<i64> = cv.keys().copied().collect();
+        ts.sort();
+        steps.extend(ts.into_iter().filter_map(|t| cv.get(&(t + 1)).map(|n| (*r, t, cv[&t], *n))));
+    }
+    let ms = crate::join::par_map(&steps, crate::join::threads(), |(_, t, c, _)| ev.motion.face_motion(*t, t + 1, c).0);
+    let mut out: IndexMap<i64, BTreeMap<i64, [f64; 4]>> = covers.keys().map(|r| (*r, BTreeMap::new())).collect();
+    for ((r, t, c, n), m) in steps.iter().zip(ms) {
         let Some(m) = m else { continue };
         let q = np::gemv(&m, [c[0], c[1], 1.0]);
         let k = np::det2(m[0][0], m[0][1], m[1][0], m[1][1]).abs().sqrt();
         if np::hypot(q[0] - n[0], q[1] - n[1]) <= FLOW_AGREE * c[2] && FLOW_SCALE.0 <= k && k <= FLOW_SCALE.1 {
-            out.insert(t, [py_round(m[0][0], 4), py_round(m[1][0], 4), py_round(m[0][2], 2), py_round(m[1][2], 2)]);
+            out[r].insert(*t, [py_round(m[0][0], 4), py_round(m[1][0], 4), py_round(m[0][2], 2), py_round(m[1][2], 2)]);
         }
     }
     out

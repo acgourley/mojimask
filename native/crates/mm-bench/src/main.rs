@@ -120,7 +120,8 @@ impl Cfg {
     fn tool_args(&self) -> Vec<String> {
         vec!["--depth".into(), DEPTH.into(), "--models".into(), self.places.models().display().to_string()]
     }
-    fn run_tool(&self, args: &[String]) -> Result<()> {
+    /// Runs mm-scan-tool; its standard output.
+    fn run_tool(&self, args: &[String]) -> Result<String> {
         let mut c = Command::new(self.places.tool());
         c.args(args).args(self.tool_args()).env("MM_SCAN_QUIET", "1");
         let o = c.output().with_context(|| format!("running {}", self.places.tool().display()))?;
@@ -131,7 +132,7 @@ impl Cfg {
             };
             bail!("mm-scan-tool {} failed:\n{}{}", args[0], tail(&o.stdout), tail(&o.stderr));
         }
-        Ok(())
+        Ok(String::from_utf8_lossy(&o.stdout).to_string())
     }
 
     /// The clip's base project (detection, camera motion, depth), scanned the first time.
@@ -150,8 +151,8 @@ impl Cfg {
         Ok(b)
     }
 
-    /// A fresh copy of the base with today's decide step run on it; (project, seconds).
-    fn decide(&self, clip: &str) -> Result<(PathBuf, f64)> {
+    /// A fresh copy of the base with today's decide step run on it; (project, seconds, each stage's seconds).
+    fn decide(&self, clip: &str) -> Result<(PathBuf, f64, Py)> {
         let base = self.base(clip)?;
         let run = self.places.out.join(clip).join("run");
         if run.exists() {
@@ -159,8 +160,15 @@ impl Cfg {
         }
         copy_tree(&base, &run)?;
         let t0 = Instant::now();
-        self.run_tool(&["decide".into(), run.display().to_string()])?;
-        Ok((run, py_round1(t0.elapsed().as_secs_f64())))
+        let out = self.run_tool(&["decide".into(), run.display().to_string()])?;
+        let secs = py_round1(t0.elapsed().as_secs_f64());
+        let info: serde_json::Value = serde_json::from_str(out.trim()).unwrap_or_default();
+        let mut stages = Py::from_serde(&info["info"]["stage_seconds"]);
+        if let Some(d) = stages.as_dict_mut() {
+            let pre = info["info"]["faces_prefetch_seconds"].as_f64().unwrap_or(0.0);
+            d.insert("faces_prefetch", Py::Float((pre * 100.0).round() / 100.0));
+        }
+        Ok((run, secs, stages))
     }
 }
 
@@ -901,15 +909,17 @@ fn main() -> Result<()> {
     let mut lines = vec![];
     for clip in clips.split(',').map(str::trim).filter(|c| !c.is_empty()) {
         cfg.places.clip(clip)?;
-        let (proj, secs) = cfg.decide(clip)?;
+        let (proj, secs, stages) = cfg.decide(clip)?;
         let row = if clip == "jazz" {
-            let rec = jazz(&cfg, &proj, secs, &note)?;
+            let mut rec = jazz(&cfg, &proj, secs, &note)?;
+            rec.as_dict_mut().unwrap().insert("stage_s", stages.clone());
             append_line(&cfg.places.history(), &rec.dumps())?;
             let line = summary(&rec);
             println!("{line}");
             pydict![("clip", clip), ("line", line), ("record", rec)]
         } else {
-            let row = worst_case(&proj, secs, clip)?;
+            let mut row = worst_case(&proj, secs, clip)?;
+            row.as_dict_mut().unwrap().insert("stage_s", stages.clone());
             println!("{}", row.dumps());
             row
         };

@@ -262,13 +262,13 @@ pub struct RealBody {
 }
 
 impl Appearance for RealBody {
-    fn body(&mut self, t: i64, bx: &[f64; 4]) -> Vec<f32> {
+    fn body(&self, t: i64, bx: &[f64; 4]) -> Vec<f32> {
         let img = self.frames.get(t);
         let c = appearance::crop(&img, bx, 0.0).expect("body crop (the scan checked it)");
         appearance::reid_embed(&self.models, &[c]).remove(0)
     }
     /// One OSNet batch for the group's crops, as questions._looks runs appearance.reid_embed.
-    fn bodies(&mut self, crops: &[(i64, [f64; 4])]) -> Vec<Vec<f32>> {
+    fn bodies(&self, crops: &[(i64, [f64; 4])]) -> Vec<Vec<f32>> {
         let cs: Vec<Mat<u8>> = crops
             .iter()
             .map(|(t, bx)| appearance::crop(&self.frames.get(*t), bx, 0.0).expect("body crop (the scan checked it)"))

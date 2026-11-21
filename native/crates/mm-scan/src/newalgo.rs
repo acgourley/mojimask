@@ -56,15 +56,23 @@ fn rnd(obs: &indexmap::IndexMap<i64, geom::Cs>) -> Py {
     Py::Dict(obs.iter().map(|(t, o)| (t.to_string(), Py::List(o.iter().map(|v| Py::Float(py_round(*v, 2))).collect()))).collect())
 }
 
-/// Every stage's output, for parity dumps.
+/// Every stage's output, for parity dumps, and the seconds each stage took (evidence included).
 #[derive(Default)]
 pub struct Stages {
     pub items: Vec<(String, Py)>,
+    pub seconds: Vec<(&'static str, f64)>,
+    lap: Option<std::time::Instant>,
 }
 
 impl Stages {
     fn put(&mut self, k: &str, v: Py) {
         self.items.push((k.to_string(), v));
+    }
+    /// The seconds since the last lap (or the start), as stage `k`.
+    fn lap(&mut self, k: &'static str) {
+        let now = std::time::Instant::now();
+        let t0 = self.lap.replace(now).unwrap_or(now);
+        self.seconds.push((k, (now - t0).as_secs_f64()));
     }
 }
 
@@ -252,7 +260,7 @@ pub fn write(dst: &Path, tracks: Dict, hidden: &[String], extra_edits: Vec<(&str
 
 /// newalgo._run: the decide step. Returns {"tracks", "people", "hidden"} and each stage's output.
 pub fn run(proj: &Path, ev: &mut Evidence, viz: &mut Viz) -> Result<(Dict, Stages), String> {
-    let mut stages = Stages::default();
+    let mut stages = Stages { lap: Some(std::time::Instant::now()), ..Default::default() };
     // a rescan starts over: the old facts name the old scan's boxes (and the rules mustn't read old answers)
     for e in std::fs::read_dir(proj).map_err(|e| e.to_string())?.flatten() {
         let n = e.file_name().to_string_lossy().to_string();
@@ -263,11 +271,14 @@ pub fn run(proj: &Path, ev: &mut Evidence, viz: &mut Viz) -> Result<(Dict, Stage
     let clip = Clip::open(proj)?;
     let tl = tracklets::build(&tracklets::detections(proj)?, &clip.mats, tracklets::R);
     stages.put("tracklets", join::tracklets_json(&tl));
+    stages.lap("tracklets");
     let j = join::join(tl, &clip, ev, viz, join::LIMIT);
     stages.put("chains", join::chains_json(&j));
     join::save(proj, &j.chains)?;
+    stages.lap("join");
     let (fs, order) = faces::measure(&j.tl, ev, viz);
     stages.put("faces", faces::faces_json(&fs, &order));
+    stages.lap("faces");
     let meta = pyjson::load(&proj.join("meta.json"))?;
     let fps = match meta.get("fps") {
         v if v.truthy() => v.as_f64().unwrap(),
@@ -276,8 +287,10 @@ pub fn run(proj: &Path, ev: &mut Evidence, viz: &mut Viz) -> Result<(Dict, Stage
     let photo = meta.get("image").truthy();
     let st = graph::run(j.tl, j.chains, fs, clip.mats.clone(), fps, viz);
     stages.put("graph", graph::graph_json(&st));
+    stages.lap("graph");
     let poses = pose::load(proj)?;
     let mut b = cover::build(proj, st, poses.as_deref(), photo, &clip, ev, viz, true)?;
+    stages.lap("cover");
     let mut att = Dict::new();
     att.insert("att", Py::List(b.d.attached.iter().map(|(f, r)| Py::List(vec![Py::Int(*f), Py::Int(*r)])).collect()));
     att.insert("gd", b.d.gd.clone());
@@ -289,6 +302,7 @@ pub fn run(proj: &Path, ev: &mut Evidence, viz: &mut Viz) -> Result<(Dict, Stage
     let n_real = tracks.iter().filter(|(_, t)| t.get("real").truthy()).count() as i64;
     let n_tracks = tracks.len() as i64;
     write(proj, tracks, &hidden, vec![("result", Py::from("pending")), ("head_pose", Py::Bool(true))], b.depth.as_deref())?;
+    stages.lap("tracks");
     let mut res = Dict::new();
     res.insert("tracks", Py::Int(n_tracks - hidden.len() as i64));
     res.insert("people", Py::Int(n_real));

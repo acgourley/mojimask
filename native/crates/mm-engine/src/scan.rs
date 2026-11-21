@@ -465,6 +465,7 @@ pub fn decide_with(proj: &Path, o: &Options, sink: Option<Box<dyn FnMut(&Py)>>) 
     let info = serde_json::json!({
         "seconds": secs,
         "faces_prefetch_seconds": prefetch_s,
+        "stage_seconds": stages.seconds.iter().map(|(k, s)| (k.to_string(), serde_json::json!((s * 100.0).round() / 100.0))).collect::<serde_json::Map<_, _>>(),
         "motion_replay [boundary, recorded, used]": usage.map(|u| u.report()),
     });
     Ok((res, stages, viz, info))

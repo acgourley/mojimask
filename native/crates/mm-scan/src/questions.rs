@@ -83,21 +83,31 @@ pub struct Group {
 pub fn groups_data(st: &mut State, poses: &[Vec<Pose>], ev: &mut Evidence, fragments: bool) -> IndexMap<i64, Group> {
     let mut inv: HashMap<i64, M33> = HashMap::new();
     let mut out = IndexMap::new();
-    let rs: Vec<i64> = st.members.keys().copied().collect();
-    for r in rs {
-        let ms = st.members[&r].clone();
-        let obs = st.group_obs(&ms);
-        let real = is_real(obs.len(), !clear_frames(st, &ms).is_empty());
+    let mut groups = vec![];
+    for (&r, ms) in &st.members {
+        let obs = st.group_obs(ms);
+        let real = is_real(obs.len(), !clear_frames(st, ms).is_empty());
         if !real && !(fragments && obs.len() > 2) {
             continue;
         }
         let mut ts: Vec<i64> = obs.keys().copied().collect();
         ts.sort();
+        groups.push((r, ms.clone(), obs, ts, real));
+    }
+    // the looks not yet measured (st.looks keeps them by member set), each group's on its own thread: every group's
+    // crops are still one OSNet batch, so the features are the same as measured one group after another
+    let todo: Vec<usize> = (0..groups.len()).filter(|&i| !st.looks.contains_key(&groups[i].1.sorted())).collect();
+    let ev_: &Evidence = ev;
+    let st_: &State = st;
+    let measured = crate::join::par_map(&todo, crate::join::threads(), |&i| {
+        let (_, ms, obs, ts, _) = &groups[i];
+        looks(st_, ms, obs, ts, poses, ev_)
+    });
+    for (i, l) in todo.into_iter().zip(measured) {
+        st.looks.insert(groups[i].1.sorted(), l);
+    }
+    for (r, ms, obs, ts, real) in groups {
         let key = ms.sorted();
-        if !st.looks.contains_key(&key) {
-            let l = looks(st, &ms, &obs, &ts, poses, ev);
-            st.looks.insert(key.clone(), l);
-        }
         let (face, body) = st.looks[&key].clone();
         let room = ts.iter().map(|t| (*t, geom::to_room(&st.mats, *t, &obs[t], &mut inv))).collect();
         out.insert(r, Group { ms: ms.copy(), obs, ts, face, body, real, room });
@@ -106,7 +116,7 @@ pub fn groups_data(st: &mut State, poses: &[Vec<Pose>], ev: &mut Evidence, fragm
 }
 
 /// questions._looks: a group's mean frontal SFace embedding and mean OSNet body feature, each None with fewer than two.
-fn looks(st: &State, ms: &PySet, obs: &IndexMap<i64, Cs>, ts: &[i64], poses: &[Vec<Pose>], ev: &mut Evidence)
+fn looks(st: &State, ms: &PySet, obs: &IndexMap<i64, Cs>, ts: &[i64], poses: &[Vec<Pose>], ev: &Evidence)
          -> (Option<Vec<f32>>, Option<Vec<f32>>) {
     let mut embs: Vec<&[f32]> = vec![];
     for c in ms.iter() {
