@@ -1,37 +1,60 @@
 //! Reading textures back to the CPU (tests, parity checks, the readback export path).
 use anyhow::{anyhow, Result};
 
+/// Reads textures back through one buffer, kept from one read to the next while the size stays the same: an export
+/// reads every frame, and a buffer made, mapped and dropped per frame (33 MB at 4K) is most of what the read costs.
+#[derive(Default)]
+pub struct Reader {
+    buf: Option<(wgpu::Buffer, u32, u32)>,
+}
+
+impl Reader {
+    /// A 4-byte-per-pixel texture's rows, handed to `f` as they sit in the buffer: (bytes, bytes per row). A row is
+    /// width * 4 bytes of pixels in the texture's own channel order, then padding up to `bytes per row`.
+    pub fn read<R>(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, tex: &wgpu::Texture, f: impl FnOnce(&[u8], usize) -> R) -> R {
+        let (w, h) = (tex.width(), tex.height());
+        let bpr = (w * 4).div_ceil(256) * 256;
+        if !self.buf.as_ref().is_some_and(|(_, bw, bh)| (*bw, *bh) == (w, h)) {
+            let b = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("readback"),
+                size: (bpr * h) as u64,
+                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+                mapped_at_creation: false,
+            });
+            self.buf = Some((b, w, h));
+        }
+        let b = &self.buf.as_ref().unwrap().0;
+        let mut enc = device.create_command_encoder(&Default::default());
+        enc.copy_texture_to_buffer(
+            tex.as_image_copy(),
+            wgpu::TexelCopyBufferInfo {
+                buffer: b,
+                layout: wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(bpr), rows_per_image: Some(h) },
+            },
+            wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+        );
+        queue.submit([enc.finish()]);
+        let sl = b.slice(..);
+        sl.map_async(wgpu::MapMode::Read, |_| {});
+        device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
+        let data = sl.get_mapped_range().expect("map");
+        let r = f(&data, bpr as usize);
+        drop(data);
+        b.unmap();
+        r
+    }
+}
+
 /// A 4-byte-per-pixel texture's bytes, tightly packed, in the texture's own channel order.
 pub fn read_texture(device: &wgpu::Device, queue: &wgpu::Queue, tex: &wgpu::Texture) -> Vec<u8> {
-    let (w, h) = (tex.width(), tex.height());
-    let bpr = (w * 4).div_ceil(256) * 256;
-    let b = device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("readback"),
-        size: (bpr * h) as u64,
-        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-        mapped_at_creation: false,
-    });
-    let mut enc = device.create_command_encoder(&Default::default());
-    enc.copy_texture_to_buffer(
-        tex.as_image_copy(),
-        wgpu::TexelCopyBufferInfo {
-            buffer: &b,
-            layout: wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(bpr), rows_per_image: Some(h) },
-        },
-        wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
-    );
-    queue.submit([enc.finish()]);
-    let sl = b.slice(..);
-    sl.map_async(wgpu::MapMode::Read, |_| {});
-    device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
-    let data = sl.get_mapped_range().expect("map");
-    let mut out = Vec::with_capacity((w * h * 4) as usize);
-    for y in 0..h as usize {
-        out.extend_from_slice(&data[y * bpr as usize..y * bpr as usize + (w * 4) as usize]);
-    }
-    drop(data);
-    b.unmap();
-    out
+    let (w, h) = (tex.width() as usize, tex.height() as usize);
+    Reader::default().read(device, queue, tex, |data, bpr| {
+        let mut out = Vec::with_capacity(w * h * 4);
+        for y in 0..h {
+            out.extend_from_slice(&data[y * bpr..y * bpr + w * 4]);
+        }
+        out
+    })
 }
 
 /// Save an RGBA8 (or BGRA8, `bgra`) texture as an RGB PNG.

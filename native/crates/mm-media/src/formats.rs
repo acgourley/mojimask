@@ -207,6 +207,15 @@ pub fn gaussian_blur(img: &Bgr, sigma: f64) -> Bgr {
 }
 
 /// formats.fit_frame on the CPU (see the module doc for how exact it is).
+/// [`fit_frame_cpu`] of a picture the caller is done with: the picture itself when it already fits (an export at
+/// the clip's own size, the usual one, used to copy every frame here).
+pub fn fit_frame_owned(img: Bgr, ow: u32, oh: u32, fit: &str) -> Bgr {
+    match fit_plan(img.w, img.h, ow, oh, fit) {
+        FitPlan::Same => img,
+        _ => fit_frame_cpu(&img, ow, oh, fit),
+    }
+}
+
 pub fn fit_frame_cpu(img: &Bgr, ow: u32, oh: u32, fit: &str) -> Bgr {
     match fit_plan(img.w, img.h, ow, oh, fit) {
         FitPlan::Same => img.clone(),

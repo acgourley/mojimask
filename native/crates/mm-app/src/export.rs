@@ -230,11 +230,30 @@ fn start_project(sh: &Arc<Shared>, out: &str, pid: String, opts: Opts) -> Result
     Ok(json!({"out": out}))
 }
 
-/// The corner mark on a BGR picture, in place (track.watermark).
-fn watermark(img: &mut mm_media::convert::Bgr, style: &mm_render::mark::MarkStyle) -> Result<()> {
-    let px = mm_render::mark::mark_px(img.w, img.h);
-    let sp = mm_render::mark::mark_sprite(style, px)?;
-    let Some((x, y)) = mm_render::mark::place(img.w, img.h, sp.w, sp.h, px) else { return Ok(()) };
+/// The corner mark for pictures of one size: its sprite and where it goes (None: no room for it). Made once for an
+/// export -- drawing the wordmark's letters is far more work than stamping them, and it used to be done for every
+/// frame.
+struct Mark {
+    size: (u32, u32),
+    at: Option<(mm_render::mark::MarkSprite, (u32, u32))>,
+}
+
+impl Mark {
+    fn new(style: &mm_render::mark::MarkStyle, w: u32, h: u32) -> Result<Mark> {
+        let px = mm_render::mark::mark_px(w, h);
+        let sp = mm_render::mark::mark_sprite(style, px)?;
+        let at = mm_render::mark::place(w, h, sp.w, sp.h, px).map(|xy| (sp, xy));
+        Ok(Mark { size: (w, h), at })
+    }
+}
+
+/// The corner mark on a BGR picture, in place (track.watermark). `made`: the mark from the frame before.
+fn watermark(img: &mut mm_media::convert::Bgr, style: &mm_render::mark::MarkStyle, made: &mut Option<Mark>) -> Result<()> {
+    if !made.as_ref().is_some_and(|m| m.size == (img.w, img.h)) {
+        *made = Some(Mark::new(style, img.w, img.h)?);
+    }
+    let Some((sp, (x, y))) = &made.as_ref().unwrap().at else { return Ok(()) };
+    let (x, y) = (*x, *y);
     let w = img.w as usize;
     for r in 0..sp.h {
         for c in 0..sp.w {
@@ -259,10 +278,15 @@ fn bgr_to_rgba(img: &mm_media::convert::Bgr) -> image::RgbaImage {
     image::RgbaImage::from_raw(img.w, img.h, v).unwrap()
 }
 
-fn rgba_to_bgr(px: &[u8], w: u32, h: u32) -> mm_media::convert::Bgr {
-    let mut d = Vec::with_capacity((w * h * 3) as usize);
-    for p in px.chunks_exact(4) {
-        d.extend_from_slice(&[p[2], p[1], p[0]]);
+/// A read-back RGBA texture's rows (`bpr` bytes each, padding after the pixels) as a BGR picture, in one pass.
+fn rows_to_bgr(rows: &[u8], bpr: usize, w: u32, h: u32) -> mm_media::convert::Bgr {
+    let mut d = vec![0u8; (w * h * 3) as usize];
+    for (y, out) in d.chunks_exact_mut(w as usize * 3).enumerate() {
+        for (o, p) in out.chunks_exact_mut(3).zip(rows[y * bpr..y * bpr + w as usize * 4].chunks_exact(4)) {
+            o[0] = p[2];
+            o[1] = p[1];
+            o[2] = p[0];
+        }
     }
     mm_media::convert::Bgr { w, h, data: d }
 }
@@ -279,25 +303,26 @@ pub(crate) fn run_project(sh: &Shared, job: &Job, pid: &str, video: &str, out: &
     let mark = if o.mark { Some(mm_render::mark::MarkStyle::from_brand(&recs.setup.brand)?) } else { None };
     let fps = sh.st.lock().unwrap().project.fps;
     let n = recs.frames.len();
-    let draw = |drawer: &mut mm_render::draw::Drawer, t: usize, img: &mm_media::convert::Bgr| -> Result<mm_media::convert::Bgr> {
-        let Some((rec, near)) = recs.get(t) else { return Ok(img.clone()) };
+    let mut reader = mm_render::readback::Reader::default();
+    let mut made_mark = None;
+    let mut draw = |drawer: &mut mm_render::draw::Drawer, t: usize, img: mm_media::convert::Bgr| -> Result<mm_media::convert::Bgr> {
+        let Some((rec, near)) = recs.get(t) else { return Ok(img) };
         let mut rec = rec.clone();
         if let Some(l) = rec.light.as_mut() {
             l.grain = if l.settings.grain { crate::records::frame_grain(img.w as usize, img.h as usize, &img.data) } else { 0.0 };
         }
-        let src = mm_render::compositor::upload_rgba(device, queue, &bgr_to_rgba(img));
+        let src = mm_render::compositor::upload_rgba(device, queue, &bgr_to_rgba(&img));
         let drawn = drawer.draw(device, queue, &src, &rec, near)?;
-        let px = mm_render::readback::read_texture(device, queue, &drawn);
-        Ok(rgba_to_bgr(&px, img.w, img.h))
+        Ok(reader.read(device, queue, &drawn, |rows, bpr| rows_to_bgr(rows, bpr, img.w, img.h)))
     };
     if mm_media::photo::is_image(video) {
         let probe = mm_media::photo::probe(video)?;
         let s = mm_media::formats::settings(&probe, &o.preset, &o.fit, o.start, o.end, Some(1));
         let img = mm_media::photo::read_image(video)?;
-        let f = draw(&mut drawer, 0, &img)?;
-        let mut f = mm_media::formats::fit_frame_cpu(&f, s.width, s.height, &s.fit);
+        let f = draw(&mut drawer, 0, img)?;
+        let mut f = mm_media::formats::fit_frame_owned(f, s.width, s.height, &s.fit);
         if let Some(m) = &mark {
-            watermark(&mut f, m)?;
+            watermark(&mut f, m, &mut made_mark)?;
         }
         mm_media::photo::write_image(out, &f, &mm_media::about::name(), &mm_media::about::made_with(), 0.92)?;
         job.set(|p| p.done = 1);
@@ -327,10 +352,10 @@ pub(crate) fn run_project(sh: &Shared, job: &Job, pid: &str, video: &str, out: &
             continue;
         }
         let img = mm_media::convert::frame_bgr(&f, &dec.probe, tags.as_deref(), mm_media::convert::Colour::Display)?;
-        let img = draw(&mut drawer, t, &img)?;
-        let mut img = mm_media::formats::fit_frame_cpu(&img, s.width, s.height, &s.fit);
+        let img = draw(&mut drawer, t, img)?;
+        let mut img = mm_media::formats::fit_frame_owned(img, s.width, s.height, &s.fit);
         if let Some(m) = &mark {
-            watermark(&mut img, m)?;
+            watermark(&mut img, m, &mut made_mark)?;
         }
         ex.push_nv12(t, mm_media::convert::bgr_to_nv12(&img))?;
         done += 1;
