@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/mm-core", "crates/mm-media", "crates/mm-render", "crates/mm-ml", "crates/mm-engine", "crates/mm-app", "crates/mm-cli", "crates/mm-vision", "crates/mm-motion", "crates/mm-analysis", "crates/mm-scan", "crates/mm-records", "crates/mm-ctl", "crates/mm-pack", "crates/mm-bench"]
 
 [workspace.package]
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 license = "AGPL-3.0-or-later"
 

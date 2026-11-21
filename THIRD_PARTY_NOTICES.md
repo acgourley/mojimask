@@ -9,12 +9,17 @@ notices` (`native/crates/mm-pack`)), and mojimask's own `LICENSE` beside this fi
 
 | model | what it does in the app | licence | text in `licenses/` |
 |---|---|---|---|
-| YOLOv5-Face-M (deepcam-cn; ONNX export via yakhyo/uniface) | finds faces | GPL-3.0; trained on WIDER FACE | `GPL-3.0.txt` |
+| YOLOv5-Face-M (deepcam-cn; ONNX export via yakhyo/uniface, modified: see below) | finds faces | GPL-3.0; trained on WIDER FACE | `GPL-3.0.txt` |
 | RetinaFace ResNet-50 (biubug6/Pytorch_Retinaface; ONNX via yakhyo/uniface) | finds faces, face landmarks | MIT; trained on WIDER FACE | `MIT-RetinaFace.txt` |
 | YOLO11x-pose (Ultralytics) | body poses, head boxes | AGPL-3.0 | `AGPL-3.0.txt` |
 | SFace 2021dec (OpenCV Zoo) | face likeness | Apache-2.0 | `Apache-2.0.txt` |
 | OSNet-AIN x1.0, MSMT17 (Kaiyang Zhou et al., torchreid) | body likeness | MIT code; trained on MSMT17, research-only data (an open question: see models/README.md) | `MIT-OSNet.txt` |
 | Depth Anything V2 Small (onnx-community export) | depth, for partial covers | Apache-2.0 (the Small size only) | `Apache-2.0.txt` |
+
+The YOLOv5-Face-M file in the app (`yolov5m-face-batch.onnx`) is a modified copy of the uniface export, changed on
+2026-11-21 by `native/tools/free_batch.py`: the output's declared batch size of 1 takes the input's batch dimension,
+and the recorded intermediate shapes are dropped, so the frame and its tiles run as one batch. No weight or node is
+changed. That script is the modification's source.
 
 WIDER FACE (the face detectors' training data) is published for research; its terms say nothing about trained
 weights.
