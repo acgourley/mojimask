@@ -297,8 +297,20 @@ impl Py {
             V::Object(o) => Py::Dict(o.iter().map(|(k, v)| (k.clone(), Py::from_serde(v))).collect()),
         }
     }
+    /// As a serde_json value. JSON has no NaN or infinity: such a float becomes null (as JavaScript's JSON.stringify
+    /// writes it), and only that float -- this used to go through `dumps`, whose Python-style `NaN` failed to parse
+    /// and turned the whole value into null.
     pub fn to_serde(&self) -> serde_json::Value {
-        serde_json::from_str(&self.dumps()).unwrap_or(serde_json::Value::Null)
+        use serde_json::Value as V;
+        match self {
+            Py::Null => V::Null,
+            Py::Bool(b) => V::Bool(*b),
+            Py::Int(i) => V::from(*i),
+            Py::Float(f) => serde_json::Number::from_f64(*f).map(V::Number).unwrap_or(V::Null),
+            Py::Str(s) => V::String(s.clone()),
+            Py::List(l) => V::Array(l.iter().map(Py::to_serde).collect()),
+            Py::Dict(d) => V::Object(d.0.iter().map(|(k, v)| (k.clone(), v.to_serde())).collect()),
+        }
     }
 }
 
@@ -675,6 +687,17 @@ pub fn write_atomic(path: &std::path::Path, text: &str) -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn to_serde_keeps_everything_but_the_nan() {
+        let v = Py::parse(r#"{"a": [1, 2.5, "x", null, true], "b": {"c": -0.0, "d": 1.0}}"#).unwrap();
+        assert_eq!(v.to_serde(), serde_json::from_str::<serde_json::Value>(&v.dumps()).unwrap());
+        let mut w = v.clone();
+        w.as_dict_mut().unwrap().insert("n", Py::Float(f64::NAN));
+        let s = w.to_serde();
+        assert!(s["n"].is_null());
+        assert_eq!(s["a"], v.to_serde()["a"]);
+    }
 
     #[test]
     fn floats_like_python() {
