@@ -114,7 +114,7 @@ Rectangle {
             Item {
                 Layout.fillWidth: true
                 Layout.preferredHeight: width * 176 / 232
-                RectCrop { anchors.fill: parent; anchors.margins: 1; pic: card.c.pic; mmPublic: page.proj.public; imgW: page.proj.w; imgH: page.proj.h }
+                RectCrop { anchors.fill: parent; anchors.margins: 1; pic: card.c.pic; mmPublic: page.proj.public }
                 AbstractButton {
                     id: em
                     objectName: "emoji-" + card.c.tid
@@ -201,7 +201,7 @@ Rectangle {
                             Layout.preferredHeight: width
                             pic: modelData
                             box: stripHover.hovered
-                            mmPublic: page.proj.public; imgW: page.proj.w; imgH: page.proj.h
+                            mmPublic: page.proj.public
                             HoverHandler { id: stripHover; cursorShape: Qt.PointingHandCursor }
                             TapHandler { onTapped: store.call("edit_at", { t: sc.modelData.t, piece: sc.modelData.piece }) }
                             ToolTip.visible: stripHover.hovered

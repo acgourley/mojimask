@@ -7,24 +7,21 @@ import ".."
 Picture {
     id: c
     property var pic: null
-    property real imgW: 1
-    property real imgH: 1
     property bool box: true
     readonly property real k: pic && pic.w > 0 ? width / pic.w : 1
     readonly property real lw: Math.max(1.5, width / 160)
     clip: true
     Rectangle { anchors.fill: parent; color: "#000000" }
     Image {
-        source: c.pic ? c.pic.url : ""
-        x: c.pic ? -c.pic.x * c.k : 0
-        y: c.pic ? -c.pic.y * c.k : 0
-        width: c.imgW * c.k
-        height: c.imgH * c.k
+        // the frame's rectangle pic.rect, cut and scaled by the server (Picture.qml)
+        source: c.pic ? c.sized(c.pic.url, Math.max(c.width, c.height) * Screen.devicePixelRatio) : ""
+        x: c.pic ? (c.pic.rect[0] - c.pic.x) * c.k : 0
+        y: c.pic ? (c.pic.rect[1] - c.pic.y) * c.k : 0
+        width: c.pic ? c.pic.rect[2] * c.k : 0
+        height: c.pic ? c.pic.rect[3] * c.k : 0
         asynchronous: true
         cache: true
-        retainWhileLoading: true   // a new sourceSize (a resize) reloads it: keep the old picture until then
-        // decoded at the size it's drawn (Picture.qml), never above its own
-        sourceSize: Qt.size(Math.min(c.imgW, width * Screen.devicePixelRatio), Math.min(c.imgH, height * Screen.devicePixelRatio))
+        retainWhileLoading: true   // a new size (a resize) reloads it: keep the old picture until then
         smooth: true
     }
     Item {

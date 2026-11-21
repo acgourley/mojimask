@@ -11,8 +11,6 @@ Column {
     property int picIndex: 0
     property string detailKey: ""
     property bool mmPublic: false
-    property real imgW: 1
-    property real imgH: 1
     property var frames: []
     property var span: [0, 0]
     property real fps: 24
@@ -44,8 +42,6 @@ Column {
         height: width
         radius: 12
         mmPublic: lp.mmPublic
-        imgW: lp.imgW
-        imgH: lp.imgH
         crop: lp.frame >= 0 && lp.frame < lp.frames.length ? lp.frames[lp.frame] : (lp.pic ? lp.pic.still : null)
         progress: lp.frame >= 0 && lp.frames.length > 1 ? lp.frame / (lp.frames.length - 1) : -1
         MouseArea {
@@ -76,6 +72,6 @@ Column {
     // load every frame of the loop ahead of playing it
     Repeater {
         model: lp.frames
-        delegate: Image { required property var modelData; width: 0; height: 0; visible: false; source: modelData.url; asynchronous: true; cache: true }
+        delegate: Image { required property var modelData; width: 0; height: 0; visible: false; source: crop.sized(modelData.url, crop.want); asynchronous: true; cache: true }
     }
 }

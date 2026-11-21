@@ -919,7 +919,7 @@ pub fn result_view(sh: &Shared, doc: &Value, open: usize) {
         .collect();
     let photo = doc["photo"].as_bool().unwrap_or(false);
     let v = json!({
-        "t": t, "w": doc["w"], "h": doc["h"], "raw": format!("{base}/api/frames/{t:05}.jpg"), "rings": rings,
+        "t": t, "w": doc["w"], "h": doc["h"], "raw": decide::frame_url(&base, t as usize), "rings": rings,
         "steps": [tx.s("result.step.scan"), tx.s("result.step.people"), tx.s("result.step.cover")],
         "covering": tx.s("result.covering"), "done": tx.s("result.done"), "head": tx.s("result.head"), "sub": tx.s("result.sub"),
         "styles": styles, "style": style,

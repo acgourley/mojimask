@@ -6,8 +6,9 @@
 //! 1-3 by slot (1 keep it, 2 not a face / different, 3 someone else), 0-9 for "whose face", J/K or arrows to move.
 //! Developer mode adds the rules' answers, filters by kind and the evidence numbers.
 //!
-//! Pictures: crops of the scanned frames (`/api/frames/NNNNN.jpg` from the project's server), given here as a frame
-//! URL plus a square in frame pixels (centre, half side) and the boxes to outline. The selected question's pictures
+//! Pictures: crops of the scanned frames, cut and scaled by the project's server (`/api/frames/NNNNN.jpg?x=&y=&w=&h=`,
+//! the page adds `&px=` for the size it draws at: [`crop_url`]), given here as that URL, the square in frame pixels
+//! (centre, half side) and the boxes to outline. The selected question's pictures
 //! loop through their box's own frames ([`loop_frames`], fetched by the page when the selection changes, kept out of
 //! the state tree because it is long).
 use crate::text::{v, Text};
@@ -107,7 +108,10 @@ pub struct Pill {
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct Crop {
     pub t: usize,
+    /// the picture: the frame's rectangle `rect` ([`crop_url`])
     pub url: String,
+    /// what `url` shows, [x, y, w, h] in whole frame pixels: the square, rounded outwards
+    pub rect: [i64; 4],
     pub cx: f64,
     pub cy: f64,
     pub half: f64,
@@ -412,10 +416,26 @@ pub fn frame_url(base: &str, t: usize) -> String {
     format!("{base}/api/frames/{t:05}.jpg")
 }
 
+/// The rectangle (x, y, w, h) of frame `t` as a picture, and the whole pixels it covers (rounded outwards; it may
+/// reach past the frame, black there). The server cuts it out and scales it down, so a 4K frame is never encoded,
+/// sent and decoded whole for a thumbnail (68 + 64 ms a picture at 4K; the page draws several a card and a loop of
+/// them). The page appends `&px=N`, the longer side it draws at (components/Picture.qml).
+pub fn crop_url(base: &str, t: usize, x: f64, y: f64, w: f64, h: f64) -> (String, [i64; 4]) {
+    let (x0, y0) = (x.floor() as i64, y.floor() as i64);
+    let r = [x0, y0, ((x + w).ceil() as i64 - x0).max(1), ((y + h).ceil() as i64 - y0).max(1)];
+    (format!("{base}/api/frames/{t:05}.jpg?x={}&y={}&w={}&h={}", r[0], r[1], r[2], r[3]), r)
+}
+
+impl Crop {
+    pub fn new(base: &str, t: usize, (cx, cy, half): (f64, f64, f64), piece: Option<[f64; 4]>, person: Option<[f64; 4]>) -> Crop {
+        let (url, rect) = crop_url(base, t, cx - half, cy - half, 2.0 * half, 2.0 * half);
+        Crop { t, url, rect, cx, cy, half, piece, person }
+    }
+}
+
 impl Ctx<'_> {
     fn crop_of(&self, st: &Still) -> Crop {
-        let (cx, cy, half) = crop(&boxes_of(st));
-        Crop { t: st.t, url: frame_url(self.base, st.t), cx, cy, half, piece: st.piece, person: st.person }
+        Crop::new(self.base, st.t, crop(&boxes_of(st)), st.piece, st.person)
     }
 
     /// "In the frame": as much of the frame as a square holds, slid to keep the boxes in it. The Decisions page never
@@ -425,7 +445,7 @@ impl Ctx<'_> {
         let (bx, by, _) = crop(&boxes_of(st));
         let cx = bx.max(half).min(self.w - half);
         let cy = by.max(half).min(self.h - half);
-        Crop { t: st.t, url: frame_url(self.base, st.t), cx, cy, half, piece: st.piece, person: st.person }
+        Crop::new(self.base, st.t, (cx, cy, half), st.piece, st.person)
     }
 }
 
@@ -740,7 +760,7 @@ pub fn loop_frames(ds: &[Value], ui: &Ui, cx: &Ctx, pic: usize) -> Value {
             cx.wide_of(&f)
         } else {
             let (x, y, _) = crop(&boxes_of(&f));
-            Crop { t, url: frame_url(cx.base, t), cx: x, cy: y, half, piece: f.piece, person: f.person }
+            Crop::new(cx.base, t, (x, y, half), f.piece, f.person)
         };
         out.push(c);
         t += step;

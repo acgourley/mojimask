@@ -192,7 +192,6 @@ Rectangle {
                             Layout.preferredHeight: 52
                             mmPublic: page.proj.public
                             crop: qrow.modelData.thumb
-                            imgW: page.proj.w; imgH: page.proj.h
                         }
                         ColumnLayout {
                             Layout.fillWidth: true
@@ -283,7 +282,6 @@ Rectangle {
                                     detailKey: page.detail ? page.detail.key : ""
                                     width: Math.min(page.side, (detailScroll.availableWidth - 16 * ((page.detail ? page.detail.pics.length : 1) - 1)) / Math.max(1, page.detail ? page.detail.pics.length : 1))
                                     mmPublic: page.proj.public
-                                    imgW: page.proj.w; imgH: page.proj.h
                                 }
                             }
                         }
@@ -380,7 +378,7 @@ Rectangle {
                                     background: Rectangle { radius: 12; color: cb.modelData.chosen ? Theme.accentTint : Theme.raised; border.color: cb.modelData.chosen ? Theme.accent : cb.hovered ? Theme.line2 : Theme.raised2 }
                                     contentItem: ColumnLayout {
                                         spacing: 4
-                                        Crop { Layout.fillWidth: true; Layout.preferredHeight: width; crop: cb.modelData.pic; mmPublic: page.proj.public; imgW: page.proj.w; imgH: page.proj.h }
+                                        Crop { Layout.fillWidth: true; Layout.preferredHeight: width; crop: cb.modelData.pic; mmPublic: page.proj.public }
                                         Row {
                                             spacing: 6
                                             Text { text: cb.modelData.name; font.family: Theme.body; font.pixelSize: 13; font.weight: Font.DemiBold; color: Theme.text }

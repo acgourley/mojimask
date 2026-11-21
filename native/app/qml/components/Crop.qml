@@ -1,5 +1,5 @@
 // A crop of a scanned frame (decide.rs Crop): the square around (cx, cy), `half` frame pixels to each side, scaled to
-// this item; the grey box (the person) and the green box (the piece) outlined (never covers: the Decisions page shows faces
+// this item (the picture is the frame's rectangle crop.rect, cut and scaled by the server); the grey box (the person) and the green box (the piece) outlined (never covers: the Decisions page shows faces
 // as they are); a progress line while it loops. Rounded like the page's canvases.
 import QtQuick
 import QtQuick.Window
@@ -9,13 +9,13 @@ import ".."
 Picture {
     id: c
     property var crop: null
-    property real imgW: 1
-    property real imgH: 1
     property real progress: -1
     property real radius: 8
     property bool boxes: true
     readonly property real n: width
     readonly property real k: crop && crop.half > 0 ? width / (2 * crop.half) : 1
+    // the longer side to ask the server for (Picture.qml)
+    readonly property real want: Math.max(width, height) * Screen.devicePixelRatio
     readonly property real lw: n < 100 ? 1.5 : n < 300 ? 2 : 3
     implicitWidth: 52
     implicitHeight: width
@@ -28,16 +28,14 @@ Picture {
         Rectangle { anchors.fill: parent; color: "#000000" }
         Image {
             id: im
-            source: c.crop ? c.crop.url : ""
-            x: c.crop ? -(c.crop.cx - c.crop.half) * c.k : 0
-            y: c.crop ? -(c.crop.cy - c.crop.half) * c.k : 0
-            width: c.imgW * c.k
-            height: c.imgH * c.k
+            source: c.crop ? c.sized(c.crop.url, c.want) : ""
+            x: c.crop ? (c.crop.rect[0] - c.crop.cx + c.crop.half) * c.k : 0
+            y: c.crop ? (c.crop.rect[1] - c.crop.cy + c.crop.half) * c.k : 0
+            width: c.crop ? c.crop.rect[2] * c.k : 0
+            height: c.crop ? c.crop.rect[3] * c.k : 0
             asynchronous: true
             cache: true
             retainWhileLoading: true
-            // decoded at the size it's drawn (Picture.qml), never above its own
-            sourceSize: Qt.size(Math.min(c.imgW, width * Screen.devicePixelRatio), Math.min(c.imgH, height * Screen.devicePixelRatio))
             smooth: true
         }
         Repeater {

@@ -20,6 +20,7 @@ use mm_core::edits::{Follow, Project};
 use mm_core::pyjson::{py_round, Dict, Py};
 use mm_records::resolve::{self as R, Item, Track};
 use mm_records::Records;
+use mm_vision::Mat;
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -342,10 +343,17 @@ impl Proj {
             _ => {}
         }
         if let Some(name) = path.strip_prefix("/api/frames/") {
-            // the frame from the video (detect colour, as the scan saw it), as a JPEG: the Decisions page's pictures
+            // the frame from the video (detect colour, as the scan saw it), as a JPEG: the pages' pictures. With
+            // x, y, w, h (whole frame pixels) only that rectangle, and with px scaled down so its longer side is px:
+            // a thumbnail costs a small JPEG, not the whole frame encoded here and decoded there.
             let t = (name.len() == 9 && name.ends_with(".jpg") && name[..5].bytes().all(|b| b.is_ascii_digit())).then(|| name[..5].parse::<i64>().ok()).flatten();
             let m = t.and_then(|t| self.frames.try_get(t).ok()).ok_or_else(|| Fail(404, "no such frame".into()))?;
-            return Ok(Reply::bytes("image/jpeg", mm_vision::jpeg::encode_bgr(&m.data, m.cols, m.rows, 90)));
+            let num = |k: &str| q.get(k).and_then(|v| v.parse::<i64>().ok());
+            let jpeg = |m: &Mat<u8>| mm_vision::jpeg::encode_bgr(&m.data, m.cols, m.rows, 90);
+            return Ok(Reply::bytes("image/jpeg", match (num("x"), num("y"), num("w"), num("h")) {
+                (Some(x), Some(y), Some(w), Some(h)) => jpeg(&cut(&m, [x, y, w, h], num("px"))),
+                _ => jpeg(&m),
+            }));
         }
         if let Some(t) = path.strip_prefix("/api/pose/") {
             return Ok(Reply::json(&self.pose_frame(clamp(t)?)));
@@ -734,5 +742,52 @@ mod portrait_tests {
         assert!(prepare_portrait(&png, &work, &root).unwrap_err().starts_with("no face"));
         assert_eq!(b64_decode("aGk=").unwrap(), b"hi");
         let _ = std::fs::remove_dir_all(&work);
+    }
+}
+
+/// The rectangle [x, y, w, h] of a BGR picture (black where it reaches past the picture; at most twice the picture's
+/// size), scaled down by area so its longer side is `px` (never up).
+fn cut(m: &Mat<u8>, [x, y, w, h]: [i64; 4], px: Option<i64>) -> Mat<u8> {
+    let (w, h) = (w.clamp(1, 2 * m.cols as i64) as usize, h.clamp(1, 2 * m.rows as i64) as usize);
+    let mut out = Mat::<u8>::new(h, w, 3);
+    let (x0, x1) = (x.clamp(0, m.cols as i64), (x.saturating_add(w as i64)).clamp(0, m.cols as i64));
+    if x1 > x0 {
+        let n = (x1 - x0) as usize * 3;
+        for r in 0..h as i64 {
+            let sy = y.saturating_add(r);
+            if (0..m.rows as i64).contains(&sy) {
+                let (s, d) = ((sy as usize * m.cols + x0 as usize) * 3, (r as usize * w + (x0 - x) as usize) * 3);
+                out.data[d..d + n].copy_from_slice(&m.data[s..s + n]);
+            }
+        }
+    }
+    let long = w.max(h);
+    match px.map(|p| p.max(16) as usize) {
+        Some(p) if p < long => {
+            let (dw, dh) = (((w * p + long / 2) / long).max(1), ((h * p + long / 2) / long).max(1));
+            mm_vision::resize_u8(&out, dw, dh, 0.0, 0.0, mm_vision::Interp::Area)
+        }
+        _ => out,
+    }
+}
+
+#[cfg(test)]
+mod cut_tests {
+    use super::*;
+
+    #[test]
+    fn rectangle_black_outside_scaled_down_not_up() {
+        let mut m = Mat::<u8>::new(4, 6, 3);
+        for (i, v) in m.data.iter_mut().enumerate() {
+            *v = (i / 3) as u8 + 1; // pixel number, 1-based, in all three channels
+        }
+        let c = cut(&m, [-1, 2, 3, 3], None);
+        assert_eq!((c.cols, c.rows), (3, 3));
+        let px = |c: &Mat<u8>, x: usize, y: usize| c.data[(y * c.cols + x) * 3];
+        assert_eq!([px(&c, 0, 0), px(&c, 1, 0), px(&c, 2, 1), px(&c, 1, 2)], [0, 13, 20, 0]);
+        assert_eq!(cut(&m, [0, 0, 6, 4], Some(100)).cols, 6);
+        let big = Mat::<u8>::new(200, 400, 3);
+        let s = cut(&big, [0, 0, 400, 200], Some(64));
+        assert_eq!((s.cols, s.rows), (64, 32));
     }
 }

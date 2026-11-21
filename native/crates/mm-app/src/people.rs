@@ -5,7 +5,7 @@
 //! Everyone starts covered; a card shows someone who's happy to be seen, names them, or picks their emoji. Each is a
 //! fact about their boxes (facts.py) sent to `/api/facts`; the server works out the edits from them and replies with
 //! who's who now, and the cards are made again from that.
-use crate::decide::{by, emoji_for, frame_url, idstr, palette_for};
+use crate::decide::{by, crop_url, emoji_for, idstr, palette_for};
 use crate::text::{v, Text};
 use serde::Serialize;
 use serde_json::Value;
@@ -39,7 +39,10 @@ pub struct PeopleState {
 #[derive(Clone, Debug, Serialize)]
 pub struct Pic {
     pub t: usize,
+    /// the picture: the frame's rectangle `rect` (decide::crop_url)
     pub url: String,
+    /// what `url` shows, [x, y, w, h] in whole frame pixels
+    pub rect: [i64; 4],
     pub x: f64,
     pub y: f64,
     pub w: f64,
@@ -169,7 +172,8 @@ pub fn view(ui: &Ui, cx: &Ctx) -> PeopleState {
         let emoji = emoji_for(&p.tid, edits, cx.palettes);
         let (bt, bc, _) = p.best.unwrap();
         let (x, y, cw, ch) = crop(bc, 1.4, 348.0, 264.0, w, h);
-        let pic = Pic { t: bt, url: frame_url(cx.base, bt), x, y, w: cw, h: ch, face: bc, tip: String::new(), piece: String::new() };
+        let (url, rect) = crop_url(cx.base, bt, x, y, cw, ch);
+        let pic = Pic { t: bt, url, rect, x, y, w: cw, h: ch, face: bc, tip: String::new(), piece: String::new() };
         // up to 8 detected moments, spread over their time on screen
         let det: Vec<&(usize, [f64; 3], String, String)> = p.frames.iter().filter(|f| f.2 == "obs").collect();
         let pick: Vec<&(usize, [f64; 3], String, String)> = if det.is_empty() { p.frames.iter().collect() } else { det };
@@ -178,9 +182,11 @@ pub fn view(ui: &Ui, cx: &Ctx) -> PeopleState {
             .map(|i| {
                 let f = pick[i * pick.len() / n];
                 let (x, y, cw, ch) = crop(f.1, 1.3, 240.0, 240.0, w, h);
+                let (url, rect) = crop_url(cx.base, f.0, x, y, cw, ch);
                 Pic {
                     t: f.0,
-                    url: frame_url(cx.base, f.0),
+                    url,
+                    rect,
                     x,
                     y,
                     w: cw,
