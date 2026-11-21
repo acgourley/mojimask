@@ -52,15 +52,6 @@ const CENSUS_REACH: i64 = 2; // frames from a census frame a "not" box (or a per
 /// the files a decide step writes, left out of the copy of a base
 const RESULT: [&str; 5] = ["proto_tracks.json", "edits.json", "facts.json", "bench_last.json", "proto"];
 
-/// The Decisions page's order: faces first (decisions.html)
-fn rank(kind: &str) -> i32 {
-    match kind {
-        "whose" => 0,
-        "track" | "overlap" | "blip" => 1,
-        _ => 2,
-    }
-}
-
 // ---------------------------------------------------------------- places
 struct Places {
     native: PathBuf,
@@ -252,11 +243,7 @@ impl Counter {
 /// The open questions in the Decisions page's order; the first is asked next.
 fn open_in_order(out: &[Py]) -> Vec<&Py> {
     let mut op: Vec<&Py> = out.iter().filter(|d| d.get("answer").is_null()).collect();
-    let key = |d: &Py| {
-        (rank(d.get("kind").as_str().unwrap_or("")), -d.get("weight").as_f64().unwrap_or(0.0),
-         -d.get("evidence").get("frames").as_f64().unwrap_or(0.0))
-    };
-    op.sort_by(|a, b| key(a).partial_cmp(&key(b)).unwrap_or(std::cmp::Ordering::Equal)); // stable, as sorted()
+    FX::page_sort(&mut op, |d| FX::page_key_of(d));
     op
 }
 

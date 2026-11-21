@@ -70,6 +70,45 @@ pub const A_OPEN: &str = "open"; // same-person questions: (answers() turns "ope
 pub const A_WAITING: &str = "waiting";
 
 pub const FACE_KINDS: [&str; 3] = ["track", "blip", "overlap"];
+
+/// ## The Decisions page's order
+/// The one order the app, `mm-cli decisions` and the rules' benchmark all list questions in (so the benchmark asks
+/// what a person would be asked next): the open questions first, faces before who's who (a face answer can settle
+/// same-person questions), then the weightiest, then the one seen in the most frames. Settled questions keep the
+/// order they came in. A question is open while nothing has answered it ("by" is empty).
+pub struct PageKey {
+    settled: bool,
+    rank: u8,
+    weight: f64,
+    frames: f64,
+}
+
+pub fn page_key(open: bool, kind: &str, weight: f64, frames: f64) -> PageKey {
+    if !open {
+        return PageKey { settled: true, rank: 0, weight: 0.0, frames: 0.0 };
+    }
+    let rank = match kind {
+        "whose" => 0,
+        k if FACE_KINDS.contains(&k) => 1,
+        "same" => 2,
+        _ => 3,
+    };
+    PageKey { settled: false, rank, weight, frames }
+}
+
+/// [`page_key`] of a record as [`answers`] (or the project server) gives it.
+pub fn page_key_of(d: &Py) -> PageKey {
+    let num = |v: &Py| v.as_f64().unwrap_or(0.0);
+    page_key(!d.get("by").truthy(), d.get("kind").as_str().unwrap_or(""), num(d.get("weight")), num(d.get("evidence").get("frames")))
+}
+
+/// Put `ds` in the page's order (stable).
+pub fn page_sort<T>(ds: &mut [T], key: impl Fn(&T) -> PageKey) {
+    ds.sort_by(|a, b| {
+        let (a, b) = (key(a), key(b));
+        a.settled.cmp(&b.settled).then(a.rank.cmp(&b.rank)).then(b.weight.total_cmp(&a.weight)).then(b.frames.total_cmp(&a.frames))
+    });
+}
 pub const ASK_SCORE: f64 = 0.8;
 pub const STOP_AFTER: i64 = 4;
 pub const WEAK_RULE: &str = "rule: weak match (score under 0.8), not asked";
@@ -736,5 +775,17 @@ mod tests {
         let fs = facts_for_answer(&d, &Py::from(A_SOMEONE_ELSE));
         assert_eq!(fs.len(), 2);
         assert_eq!(fs[1].dumps(), r#"{"kind": "different", "pieces": ["3", "9"], "answer": "someone else"}"#);
+    }
+
+    #[test]
+    fn page_order_open_first_faces_before_same_settled_as_they_came() {
+        let d = |id: i64, kind: &str, by: Py, w: i64, fr: i64| pydict![("id", id), ("kind", kind), ("by", by), ("weight", w), ("evidence", pydict![("frames", fr)])];
+        let mut ds = vec![
+            d(1, "same", strv("user"), 9, 9), d(2, "same", Py::Null, 0, 50), d(3, "track", strv("rule: x"), 0, 1),
+            d(4, "blip", Py::Null, 0, 5), d(5, "track", Py::Null, 2, 1), d(6, "overlap", Py::Null, 0, 7), d(7, "whose", Py::Null, 0, 0),
+        ];
+        page_sort(&mut ds, page_key_of);
+        let ids: Vec<i64> = ds.iter().map(|d| d.get("id").as_i64().unwrap()).collect();
+        assert_eq!(ids, [7, 5, 6, 4, 2, 1, 3]);
     }
 }

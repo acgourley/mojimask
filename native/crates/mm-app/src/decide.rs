@@ -224,32 +224,9 @@ pub fn by(d: &Value) -> &'static str {
     }
 }
 
-/// Open questions first, the ones that matter most first (faces before who's who; by weight, then by frames); the
-/// answered ones in the order the server gave them (decisions.html load).
+/// The page's order ([`mm_core::facts::page_sort`], shared with `mm-cli decisions` and the rules' benchmark).
 pub fn sort(ds: &mut [Value]) {
-    let rank = |k: &str| match k {
-        "whose" => 0,
-        "track" | "overlap" | "blip" => 1,
-        "same" => 2,
-        _ => 3,
-    };
-    let mut idx: Vec<(usize, Value)> = ds.iter().cloned().enumerate().collect();
-    idx.sort_by(|(i, a), (j, b)| {
-        let (ao, bo) = (by(a) != "open", by(b) != "open");
-        ao.cmp(&bo).then_with(|| {
-            if ao {
-                i.cmp(j)
-            } else {
-                rank(s(a, "kind"))
-                    .cmp(&rank(s(b, "kind")))
-                    .then(num(b, "weight").total_cmp(&num(a, "weight")))
-                    .then(num(&b["evidence"], "frames").total_cmp(&num(&a["evidence"], "frames")))
-            }
-        })
-    });
-    for (k, (_, d)) in idx.into_iter().enumerate() {
-        ds[k] = d;
-    }
+    mm_core::facts::page_sort(ds, |d| mm_core::facts::page_key(by(d) == "open", s(d, "kind"), num(d, "weight"), num(&d["evidence"], "frames")));
 }
 
 /// The answers a person can give (value, label key), left to right: keys 1, 2, 3.

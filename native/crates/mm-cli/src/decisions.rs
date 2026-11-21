@@ -42,7 +42,7 @@ use mm_core::pyjson::{self, Dict, Py};
 use mm_core::{projects, pydict};
 use std::path::{Path, PathBuf};
 
-const RANK: [(&str, i64); 5] = [("whose", 0), ("track", 1), ("overlap", 1), ("blip", 1), ("same", 2)];
+const KINDS: [&str; 5] = ["blip", "overlap", "same", "track", "whose"];
 
 fn choices(kind: &str) -> Option<Vec<&'static str>> {
     Some(match kind {
@@ -151,15 +151,9 @@ pub fn slim(d: &Py) -> Py {
     out
 }
 
-/// decisions.html's order: open first; faces before who's who; the weightiest, then the longest, first.
+/// The Decisions page's order ([`FX::page_sort`]).
 pub fn ordered(mut ds: Vec<Py>) -> Vec<Py> {
-    let key = |d: &Py| {
-        let rank = RANK.iter().find(|(k, _)| Some(*k) == d.get("kind").as_str()).map(|(_, r)| *r).unwrap_or(3);
-        let w = d.get("weight").or(&Py::Int(0)).as_f64().unwrap_or(0.0);
-        let fr = d.get("evidence").get("frames").or(&Py::Int(0)).as_f64().unwrap_or(0.0);
-        (d.get("by").truthy(), rank, -w, -fr)
-    };
-    ds.sort_by(|a, b| key(a).partial_cmp(&key(b)).unwrap_or(std::cmp::Ordering::Equal));
+    FX::page_sort(&mut ds, FX::page_key_of);
     ds
 }
 
@@ -229,8 +223,8 @@ fn run(args: &[String]) -> std::result::Result<(), Fail> {
                     "--kind" => {
                         i += 1;
                         let k = rest.get(i).ok_or_else(usage)?;
-                        if !RANK.iter().any(|(r, _)| r == k) {
-                            return fail(format!("--kind: one of {}", ["blip", "overlap", "same", "track", "whose"].join(", ")));
+                        if !KINDS.contains(&k.as_str()) {
+                            return fail(format!("--kind: one of {}", KINDS.join(", ")));
                         }
                         kind = Some(k.clone());
                     }
