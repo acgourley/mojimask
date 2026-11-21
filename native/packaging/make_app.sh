@@ -71,7 +71,7 @@ PACK="$NATIVE/target/release/mm-pack"
 echo "host: $HOST"
 
 # models: the detectors, pose, face and body re-ID the scan runs (mm-engine), plus the depth model the app turns on
-MODELS=(yolov5m-face retinaface-r50 yolo11x-pose sface-2021dec osnet-ain-x1_0-msmt17)
+MODELS=(yolov5m-face-batch retinaface-r50 yolo11x-pose sface-2021dec osnet-ain-x1_0-msmt17)
 DEPTH_REL=depth-anything-v2-small/model.onnx      # mm-analysis depth.rs: models/depth-anything-v2-small/model.onnx
 for m in "${MODELS[@]}"; do [ -f "$MODELS_SRC/onnx/$m.onnx" ] || { echo "missing $MODELS_SRC/onnx/$m.onnx" >&2; exit 1; }; done
 [ -f "$MODELS_SRC/$DEPTH_REL" ] || { echo "missing $MODELS_SRC/$DEPTH_REL" >&2; exit 1; }

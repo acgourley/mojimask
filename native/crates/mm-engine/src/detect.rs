@@ -9,8 +9,8 @@
 //!   "ane" CoreML NeuralNetwork, CPU+Neural Engine (fp16, about the same speed on every M-series chip); "cpu" plain
 //!   ONNX Runtime CPU. The models run concurrently, so a plan that splits them across GPU and Neural Engine uses both
 //!   at once.
-//! - Models (models/onnx/): yolov5m-face.onnx (YOLOv5-Face-M, GPL-3.0, fixed 640x640: whole frame + 640 tiles over
-//!   the canvas, merged by NMS 0.5), retinaface-r50.onnx (RetinaFace ResNet-50, MIT, on the canvas), yolo11x-pose.onnx
+//! - Models (models/onnx/): yolov5m-face-batch.onnx (YOLOv5-Face-M, GPL-3.0, fixed 640x640: whole frame + 640 tiles
+//!   over the canvas, merged by NMS 0.5; one model run per frame, see "The tiles as one batch"), retinaface-r50.onnx (RetinaFace ResNet-50, MIT, on the canvas), yolo11x-pose.onnx
 //!   (YOLO11x-pose, AGPL-3.0, Ultralytics rect letterbox at 1280). Pre/post-processing follows uniface (face
 //!   models) and Ultralytics (pose).
 //! - Output formats: face detectors [x1, y1, x2, y2, score] in source pixels; pose_full
@@ -19,6 +19,19 @@
 //! Exactness: pixels through mm-vision (bit-exact with the project's cv2), post-processing through mm-ml (numpy's
 //! float widths, its argsort order). With the same execution provider the boxes equal Python's
 //! (native/tools/parity/detect_dets.py).
+//!
+//! **The tiles as one batch** (2026-11-21): YOLOv5-Face sees the whole frame and each 640 tile of the canvas, 7
+//! pictures for a 16:9 or 9:16 clip. They go through the model as one batch, in one run, where each used to be a run
+//! of its own. The uniface export has a free batch dimension on its input but declares its output as a batch of
+//! one; native/tools/free_batch.py frees that (no weight or node changes), giving yolov5m-face-batch.onnx. The
+//! session is pinned to the batch's size (CoreML needs static shapes; left free, the GPU path fails to compile).
+//! Measured on jazz (127 frames, plan "default", a busy machine): the model alone 79 -> 46 ms a frame on the GPU,
+//! 896 -> 622 on the CPU, 177 -> 154 on the Neural Engine; the detect step 145 -> 100 ms a frame (18.5 -> 12.8 s,
+//! three runs each, within 0.2 s). The boxes: all 4685 are there, moved by at most 0.00006 px (scores by 6e-7) on
+//! the GPU; the other two models' boxes are byte-identical, the scan's tracks differ only in rounded flow values
+//! (0.01 at most), and the rules benchmark's jazz line is the same. Jazz upsampled to 4K (same canvas, so the same 7
+//! pictures): the detect step 30-38 s -> 17-24 s (three runs each, alternating, the machine busier still), 4563
+//! boxes moved by at most 0.0005 px. On the Neural Engine a batch moves boxes by up to 0.25 px against one by one.
 //!
 //! **Plans and the timed choice** (onnx_core.fastest_core): each plan is timed on a few real frames and the fastest
 //! kept, remembered per Mac model, ONNX Runtime version and plan table in a JSON file (ours: `engine_native.json`
@@ -233,6 +246,9 @@ impl Shaped {
     }
 }
 
+/// The name of yolov5m-face-batch.onnx's batch dimension (the export's own name for it).
+const YOLO_BATCH: &str = "s77";
+
 /// A detection result: one row per box (see the module doc for the layouts).
 pub type Boxes = Vec<Vec<f64>>;
 
@@ -246,7 +262,7 @@ pub enum Kind {
 impl Kind {
     pub fn file(self) -> &'static str {
         match self {
-            Kind::YoloFace => "yolov5m-face.onnx",
+            Kind::YoloFace => "yolov5m-face-batch.onnx",
             Kind::RetinaFace => "retinaface-r50.onnx",
             Kind::Pose => "yolo11x-pose.onnx",
         }
@@ -267,17 +283,24 @@ impl Model {
         Model { kind, m: Shaped { path: models_dir.join(kind.file()), ep, s: HashMap::new() }, env: rt::env(), cache, pri: HashMap::new() }
     }
 
-    fn yolo_detect(&mut self, img: &Mat<u8>) -> Result<Vec<[f64; 5]>> {
-        let lb = letterbox(img, 640, false);
-        let o = self.m.run(&self.env, self.cache.as_deref(), &lb.shape, lb.x, &[])?;
-        Ok(post::yolo_face(&o[0].1, 0.05, 0.4, lb.s, lb.pw, lb.ph))
+    /// YOLOv5-Face on several pictures as one batch (one model run): each picture's boxes, in its own pixels.
+    fn yolo_detect(&mut self, imgs: &[&Mat<u8>]) -> Result<Vec<Vec<[f64; 5]>>> {
+        let n = imgs.len();
+        let lbs: Vec<Letterboxed> = imgs.iter().map(|i| letterbox(i, 640, false)).collect();
+        let mut x = Vec::with_capacity(n * 3 * 640 * 640);
+        for lb in &lbs {
+            x.extend_from_slice(&lb.x);
+        }
+        let dims = [(YOLO_BATCH.to_string(), n as i64)];
+        let o = self.m.run(&self.env, self.cache.as_deref(), &[n, 3, 640, 640], x, &dims)?;
+        let per = o[0].1.len() / n;
+        Ok(lbs.iter().zip(o[0].1.chunks_exact(per)).map(|(lb, p)| post::yolo_face(p, 0.05, 0.4, lb.s, lb.pw, lb.ph)).collect())
     }
 
     pub fn run(&mut self, frame: &Mat<u8>, big: &Mat<u8>, k: f64) -> Result<Boxes> {
         match self.kind {
             Kind::YoloFace => {
                 // whole frame (catches big faces) + overlapping 640 tiles over the canvas, merged by NMS 0.5
-                let mut out: Vec<[f64; 5]> = self.yolo_detect(frame)?;
                 let t = 640usize;
                 let grid = |n: usize| {
                     let m = n.saturating_sub(t);
@@ -288,11 +311,14 @@ impl Model {
                     v.dedup();
                     v
                 };
-                for y in grid(big.rows) {
-                    for x in grid(big.cols) {
-                        for b in self.yolo_detect(&tile(big, x, y, t))? {
-                            out.push([(b[0] + x as f64) / k, (b[1] + y as f64) / k, (b[2] + x as f64) / k, (b[3] + y as f64) / k, b[4]]);
-                        }
+                let at: Vec<(usize, usize)> = grid(big.rows).into_iter().flat_map(|y| grid(big.cols).into_iter().map(move |x| (x, y))).collect();
+                let tiles: Vec<Mat<u8>> = at.iter().map(|&(x, y)| tile(big, x, y, t)).collect();
+                let imgs: Vec<&Mat<u8>> = std::iter::once(frame).chain(&tiles).collect();
+                let mut found = self.yolo_detect(&imgs)?.into_iter();
+                let mut out: Vec<[f64; 5]> = found.next().unwrap();
+                for (&(x, y), boxes) in at.iter().zip(found) {
+                    for b in boxes {
+                        out.push([(b[0] + x as f64) / k, (b[1] + y as f64) / k, (b[2] + x as f64) / k, (b[3] + y as f64) / k, b[4]]);
                     }
                 }
                 if out.is_empty() {
