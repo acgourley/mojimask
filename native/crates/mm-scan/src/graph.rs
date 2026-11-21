@@ -43,6 +43,17 @@
 //!   wrong one gone, questions 7 -> 6 (the one between different people gone); the same for SPEED 3 to 8
 //!   (2026-11-14).
 //!
+//! Known (jazz, 2026-11-20, frames from the video): census person 12 ends up as two people, boxes 8 and 357. At frame
+//! 106 the detector boxed that head twice: box 395 (the end of chain 357-363-395) and box 397, one frame long and half
+//! on the head (IoU 0.27 with 395: under DUP_IOU, so two heads "on screen together"). join's follow back from the
+//! next tracklet (415) lands on 397, not 395, and on the video's pixels 397's own follow lands on 415 too, so 397
+//! joins the chain that carries on. Both chains then match person 8's face (0.86); the first merged refuses the
+//! second. On the JPEG copies' pixels 397's follow drifted, nothing joined it, and both merged. Not fixed: no
+//! threshold here does it without giving up something measured -- SAME_FACE 0.62 to 0.70 and ASK_FACE 0.53, 0.61
+//! give the same benchmark line (asked 14, split 1); SAME_FACE 0.60 asks 12 and still splits, under the 1% it was
+//! set by; CLEAR_FACE 0.55 asks 13 (one overlap question settled, rightly) and 0.40 asks 15, one question either
+//! way on one clip. The benchmark's bench_last.json now names who is split ("people").
+//!
 //! (The Python module's census diagnostics -- truth_report, the command line -- aren't ported.)
 use crate::faces::{self, Faces};
 use crate::geom::{self, Cs};

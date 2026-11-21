@@ -754,6 +754,22 @@ fn fingerprint(native: &Path) -> String {
     format!("{h:016x}")[..10].to_string()
 }
 
+/// Who is split or mixed after the replay, for bench_last.json: {"split": {census person: {final person: [boxes]}},
+/// "mixed": {final person: {census person: [boxes]}}} -- the boxes to look at behind `people_split` / `people_mixed`.
+fn split(truth: &Truth, cov: &Covers) -> Py {
+    let keys: Vec<String> = truth.pt.get("tracks").as_dict().map(|d| d.keys().map(String::from).collect()).unwrap_or_default();
+    type Two = std::collections::BTreeMap<String, std::collections::BTreeMap<String, Vec<Py>>>;
+    let (mut by_truth, mut by_final): (Two, Two) = Default::default();
+    for k in keys.iter().filter(|k| !cov.nf.contains(*k) && truth.is_face(k)) {
+        let (lab, p) = (truth.person(k).unwrap_or_else(|| "?".into()), cov.comp.c(k));
+        by_truth.entry(lab.clone()).or_default().entry(p.clone()).or_default().push(Py::from(k.as_str()));
+        by_final.entry(p).or_default().entry(lab).or_default().push(Py::from(k.as_str()));
+    }
+    let many = |m: Two| Py::Dict(m.into_iter().filter(|(_, v)| v.len() > 1)
+        .map(|(k, v)| (k, Py::Dict(v.into_iter().map(|(k, v)| (k, Py::List(v))).collect()))).collect());
+    pydict![("split", many(by_truth)), ("mixed", many(by_final))]
+}
+
 /// Jazz against its census: the record (decision_bench's fields), the per-rule table, the wrong answers, the log.
 fn jazz(cfg: &Cfg, proj: &Path, secs: f64, note: &str) -> Result<Py> {
     let truth = Truth::new(&cfg.places.truth(), proj)?;
@@ -777,7 +793,8 @@ fn jazz(cfg: &Cfg, proj: &Path, secs: f64, note: &str) -> Result<Py> {
         rec.as_dict_mut().unwrap().insert("truncated", Py::Bool(true));
     }
     let rules_py = Py::Dict(rules.iter().map(|(k, v)| (k.clone(), v.py())).collect());
-    let last = pydict![("record", rec.clone()), ("rules", rules_py), ("wrong", Py::List(wrong)), ("asked", Py::List(r.log))];
+    let last = pydict![("record", rec.clone()), ("rules", rules_py), ("wrong", Py::List(wrong)), ("asked", Py::List(r.log)),
+                      ("people", split(&truth, &cov))];
     std::fs::write(proj.join("bench_last.json"), last.dumps_indent(1))?;
     Ok(rec)
 }

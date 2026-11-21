@@ -16,6 +16,14 @@
 //! box centre; re-centring moves the box onto that face's head box (track.face_to_head), cancelling drift.
 //! Evidence for this rule: jazz labels, and six clips without labels.
 //!
+//! These thresholds and the frames' pixels (2026-11-20). Since the scan reads its frames from the video and not from
+//! JPEG copies, jazz asks 14 questions where it asked 11 and splits one person. Retuning FACE and LOOKS doesn't bring
+//! that back: every pair of 0.4, 0.5 and 0.6 gives the same benchmark line on the video's pixels (asked 14, needless
+//! covers 5, people split 1), though the chains differ, and on the JPEG copies' pixels FACE 0.4 with
+//! LOOKS 0.4, 0.5 and 0.6 all ask 11 (the last splits one person as well). join's MEET: 0.3 splits three people; 0.5 splits none but
+//! leaves a second face uncovered. So they stay; what differs is which of two near-equal outcomes a follow or a face
+//! match falls into (graph.rs, "Known").
+//!
 //! The face's own flow (follow.face_motion, behind [`crate::evidence::Motion::face_motion`]): corners in the head box
 //! tracked both ways, then one similarity fitted to them. On a visible face nearly all corners agree (jazz, the dancer
 //! bouncing: 0.6-1.0 of them; the move it gives lands within 0.01-0.05 head sizes of her next detection, while the
