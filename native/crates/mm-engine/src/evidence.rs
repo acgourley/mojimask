@@ -285,6 +285,72 @@ impl Depth for RealDepth {
     }
 }
 
+/// Depth evidence whose cache is still being made on another thread: the decide step's first stages (tracklets,
+/// join, faces, graph) never ask about depth, so a scan starts them while the depth step runs and waits for it only
+/// here, at the first question (same.rs, overlaps, cover). The answers are the cache's, the same as when it was
+/// made first. Dropped unasked, it still waits for the step (the project's pages want the cache); dropped by a scan
+/// that is being cancelled (unwinding), it tells the step to stop.
+pub struct LazyDepth {
+    proj: std::path::PathBuf,
+    info: &'static adepth::ModelInfo,
+    frame_hw: (usize, usize),
+    making: Option<DepthStep>,
+    open: Option<RealDepth>,
+    /// seconds this waited for the depth step, once it has
+    pub waited: Arc<Mutex<Option<f64>>>,
+}
+
+/// The depth step on its thread: its result, and the flag that stops it.
+pub struct DepthStep {
+    pub thread: std::thread::JoinHandle<Result<f64>>,
+    pub stop: Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl LazyDepth {
+    pub fn new(proj: &Path, name: &str, frame_hw: (usize, usize), making: Option<DepthStep>) -> Result<LazyDepth> {
+        let info = adepth::model(name).ok_or_else(|| anyhow!("depth model {name}"))?;
+        Ok(LazyDepth { proj: proj.to_path_buf(), info, frame_hw, making, open: None, waited: Default::default() })
+    }
+    fn ready(&mut self) -> &mut RealDepth {
+        if self.open.is_none() {
+            if let Some(m) = self.making.take() {
+                let t0 = std::time::Instant::now();
+                match m.thread.join() {
+                    Ok(Ok(_)) => {}
+                    Ok(Err(e)) => panic!("depth: {e:#}"),
+                    Err(_) => panic!("depth: the step stopped"),
+                }
+                *self.waited.lock().unwrap() = Some(t0.elapsed().as_secs_f64());
+            }
+            self.open = Some(RealDepth::open(&self.proj, self.info.name, self.frame_hw).unwrap_or_else(|e| panic!("{e:#}")));
+        }
+        self.open.as_mut().unwrap()
+    }
+}
+
+impl Drop for LazyDepth {
+    fn drop(&mut self) {
+        if let Some(m) = self.making.take() {
+            if std::thread::panicking() {
+                m.stop.store(true, Relaxed);
+            } else {
+                let _ = m.thread.join();
+            }
+        }
+    }
+}
+
+impl Depth for LazyDepth {
+    fn near(&mut self, t: i64, c: &Cs, f: f64) -> f64 {
+        self.ready().d.near_f(t, c, f)
+    }
+    fn name(&self) -> &str {
+        self.info.name
+    }
+    fn margins(&self) -> (f64, f64, f64) {
+        (self.info.front, self.info.alone, self.info.apart)
+    }
+}
 
 // ------------------------------------------------------------------------------------------------ motion, native
 

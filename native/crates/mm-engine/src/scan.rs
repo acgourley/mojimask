@@ -387,6 +387,13 @@ pub fn decide(proj: &Path, o: &Options) -> Result<(Dict, mm_scan::newalgo::Stage
 
 /// [`decide`], each viz event also handed to `sink` as it happens (the app's "Deciding who's who" animation).
 pub fn decide_with(proj: &Path, o: &Options, sink: Option<Box<dyn FnMut(&Py)>>) -> Result<(Dict, mm_scan::newalgo::Stages, mm_scan::viz::Viz, serde_json::Value)> {
+    decide_beside(proj, o, sink, None)
+}
+
+/// [`decide_with`] while the depth step may still be running (`depth_step`): the rules wait for it where they first
+/// ask about depth ([`crate::evidence::LazyDepth`]).
+fn decide_beside(proj: &Path, o: &Options, sink: Option<Box<dyn FnMut(&Py)>>, depth_step: Option<crate::evidence::DepthStep>)
+                 -> Result<(Dict, mm_scan::newalgo::Stages, mm_scan::viz::Viz, serde_json::Value)> {
     use crate::evidence as ev;
     let frames = Arc::new(ev::Frames::for_project(proj)?);
     let f0 = frames.get(0);
@@ -413,8 +420,16 @@ pub fn decide_with(proj: &Path, o: &Options, sink: Option<Box<dyn FnMut(&Py)>>) 
         }
         Motion::Native => Box::new(ev::NativeMotion::new(frames.clone())),
     };
+    let mut depth_waited = None;
     let depth: Option<Box<dyn mm_scan::evidence::Depth>> = match &o.depth {
-        Some(name) => Some(Box::new(ev::RealDepth::open(proj, name, (f0.rows, f0.cols))?)),
+        Some(name) => {
+            if depth_step.is_none() && !crate::depth::cached(proj, name) {
+                return Err(anyhow!("depth {name}: no cache in {}/dets", proj.display()));
+            }
+            let d = ev::LazyDepth::new(proj, name, (f0.rows, f0.cols), depth_step)?;
+            depth_waited = Some(d.waited.clone());
+            Some(Box::new(d))
+        }
         None => None,
     };
     let mut evd = mm_scan::evidence::Evidence {
@@ -446,6 +461,7 @@ pub fn decide_with(proj: &Path, o: &Options, sink: Option<Box<dyn FnMut(&Py)>>) 
         "faces_prefetch_seconds": prefetch_s,
         "stage_seconds": stages.seconds.iter().map(|(k, s)| (k.to_string(), serde_json::json!((s * 100.0).round() / 100.0))).collect::<serde_json::Map<_, _>>(),
         "frames": frames.counts(),
+        "waited_for_depth_seconds": depth_waited.and_then(|w| *w.lock().unwrap()),
         "motion_replay [boundary, recorded, used]": usage.map(|u| u.report()),
     });
     Ok((res, stages, viz, info))
@@ -472,18 +488,44 @@ fn scan_impl(video: &str, proj: &Path, o: &Options, report: Report, sink: Option
     let tm = Instant::now();
     let motion_s = tm.elapsed().as_secs_f64(); // native: 0 here (the camera ran beside detection: detect.camera_seconds)
     report("motion", 1.0, serde_json::json!({}));
-    let mut depth_s = None;
-    if let Some(name) = &o.depth {
-        if !crate::depth::cached(proj, name) {
-            report("depth", 0.0, serde_json::json!({}));
+    // The depth step. With MOJIMASK_DEPTH_BESIDE=1 it runs beside the decide step: decide's first stages (tracklets,
+    // join, faces, graph) never ask about depth, so they start now and the rules wait for the cache where they first
+    // need it (evidence::LazyDepth). The result is the same either way (jazz, 8 scans: the same proto_tracks.json).
+    // It is not the default: on jazz it took 11 s off the best scan (53.3 -> 42.4 s) and 5 s off the median of 8
+    // and 9 (76.0 -> 70.9 s), but 2 of the 9 took 190 s and 262 s, on a machine busy with other GPU work -- to be
+    // measured again on a quiet one before it is turned on. (The scan page has no depth step of its own: it shows
+    // "getting ready" for as long as this takes.)
+    let mut depth_step = None;
+    let depth_took = Arc::new(std::sync::Mutex::new(None::<f64>));
+    if let Some(name) = o.depth.clone().filter(|n| !crate::depth::cached(proj, n)) {
+        fn make(proj: &Path, name: &str, o: &Options, progress: &mut dyn FnMut(f64)) -> Result<f64> {
             let td = Instant::now();
             let m = crate::depth::models(&o.models, o.analysis_cpu, o.cache.as_ref().map(|c| c.join("analysis")));
-            crate::depth::compute(proj, name, &m, &o.models, &mut |f| report("depth", f, serde_json::json!({})))?;
-            depth_s = Some(td.elapsed().as_secs_f64());
+            crate::depth::compute(proj, name, &m, &o.models, progress)?;
+            Ok(td.elapsed().as_secs_f64())
+        }
+        if std::env::var_os("MOJIMASK_DEPTH_BESIDE").is_some() {
+            let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+            let (stop2, proj2, o2, took) = (stop.clone(), proj.to_path_buf(), o.clone(), depth_took.clone());
+            let thread = std::thread::Builder::new().name("mm-depth".into()).spawn(move || -> Result<f64> {
+                let secs = make(&proj2, &name, &o2, &mut |_| {
+                    if stop2.load(std::sync::atomic::Ordering::Relaxed) {
+                        panic!("depth: the scan was stopped");
+                    }
+                })?;
+                *took.lock().unwrap() = Some(secs);
+                Ok(secs)
+            })?;
+            depth_step = Some(crate::evidence::DepthStep { thread, stop });
+        } else {
+            report("depth", 0.0, serde_json::json!({}));
+            let secs = make(proj, &name, o, &mut |f| report("depth", f, serde_json::json!({})))?;
+            *depth_took.lock().unwrap() = Some(secs);
         }
     }
     report("decide", 0.0, serde_json::json!({}));
-    let (res, _, _, info) = decide_with(proj, o, sink)?;
+    let (res, _, _, info) = decide_beside(proj, o, sink, depth_step)?;
+    let depth_s = *depth_took.lock().unwrap();
     let secs = t0.elapsed().as_secs_f64();
     report("done", 1.0, serde_json::json!({"seconds": secs.round()}));
     Ok(serde_json::json!({"detect": det, "motion": format!("{:?}", o.motion), "motion_seconds": motion_s, "depth_seconds": depth_s,
