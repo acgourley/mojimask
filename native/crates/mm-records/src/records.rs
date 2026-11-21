@@ -369,7 +369,7 @@ struct Light {
 }
 
 struct Setup {
-    pf: Vec<Vec<Item>>,
+    pf: Arc<Vec<Vec<Item>>>,
     style: String,
     scale: f64,
     overrides: Dict,
@@ -403,6 +403,8 @@ pub struct Records {
     light: Arc<OnceLock<std::result::Result<Lighting, String>>>,
     light_started: bool,
     setup: Option<Setup>,
+    /// the edits resolved to covers per frame, made once for each revision ([`Records::resolved`])
+    resolved: Option<(i64, Arc<Vec<Vec<Item>>>)>,
     /// each frame's draw order and occlusion plan, by what they're made of (see [`Records::planned`]): kept across
     /// setups, so a style change or an edit elsewhere doesn't plan every frame again
     plans: std::sync::Mutex<HashMap<usize, Planned>>,
@@ -451,7 +453,7 @@ impl Records {
             edits_stamp: stamp0,
             light: Arc::new(OnceLock::new()),
             light_started: false,
-            setup: None, plans: Default::default(),
+            setup: None, resolved: None, plans: Default::default(),
         };
         if r.opts.light_now {
             r.start_light();
@@ -505,6 +507,32 @@ impl Records {
         self.edits = edits;
         self.rev = rev;
         self.setup = None;
+        self.resolved = None;
+    }
+
+    /// The edits resolved to covers per frame (resolve.rs, people joined, doubles dropped). Resolving walks the whole
+    /// clip, and three callers want the same answer after every edit -- the draw records' setup (again for each style),
+    /// the project server's reply to the edit, the developer's label export -- so it is made once for a revision and
+    /// shared.
+    pub fn resolved(&mut self) -> Result<Arc<Vec<Vec<Item>>>> {
+        if let Some((rev, pf)) = &self.resolved {
+            if *rev == self.rev {
+                return Ok(pf.clone());
+            }
+        }
+        let links = R::links_for(&self.edits);
+        let pf = Arc::new(R::resolve(&self.proj.auto, &self.edits, &self.proj.mats, self.proj.n, &links, true)?);
+        self.resolved = Some((self.rev, pf.clone()));
+        Ok(pf)
+    }
+
+    /// [`Records::resolved`] for these edits at this revision (the caller's own copy of the document: the records
+    /// follow it first if they are behind).
+    pub fn resolved_for(&mut self, edits: &Py, rev: i64) -> Result<Arc<Vec<Vec<Item>>>> {
+        if self.rev != rev {
+            self.set_edits(edits.clone(), rev);
+        }
+        self.resolved()
     }
 
     /// Read PROJECT/edits.json again if it changed on disk (another writer: the Python sidecar, mm-cli).
@@ -553,8 +581,7 @@ impl Records {
         if rstyle == "orb" {
             scale *= ORB_SCALE;
         }
-        let links = R::links_for(&edits);
-        let pf = R::resolve(&self.proj.auto, &edits, &self.proj.mats, self.proj.n, &links, true)?;
+        let pf = self.resolved()?;
         let mut st = LT::settings(&edits);
         if rstyle != "emoji" && rstyle != "portrait" && rstyle != "orb" {
             st.insert("enabled", Py::Bool(false));

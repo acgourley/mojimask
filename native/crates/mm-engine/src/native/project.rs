@@ -202,10 +202,12 @@ impl Proj {
     }
 
     // -------------------------------------------------------------------------------------------- state
-    /// review_server.state(edits): resolved covers per frame, the hidden boxes, the people.
-    pub fn state(&self, edits: &Py) -> Result<Value> {
+    /// review_server.state(edits): resolved covers per frame, the hidden boxes, the people. `edits` at revision `rev`
+    /// are the document's: what they resolve to is the draw records' own copy (Records::resolved, made once for a
+    /// revision), not resolved here again.
+    pub fn state(&self, edits: &Py, rev: i64) -> Result<Value> {
         let links = R::links_for(edits);
-        let pf = R::resolve(&self.auto, &with_cuts(edits), &self.mats, self.n, &links, true)?;
+        let pf = self.recs.lock().unwrap().resolved_for(edits, rev)?;
         let shown = R::shown_pieces(edits);
         let resolved: Vec<Value> = pf
             .iter()
@@ -232,8 +234,11 @@ impl Proj {
     }
 
     pub fn state_now(&self) -> Result<Value> {
-        let e = self.doc.lock().unwrap().edits.clone();
-        self.state(&e)
+        let (e, rev) = {
+            let d = self.doc.lock().unwrap();
+            (d.edits.clone(), d.rev)
+        };
+        self.state(&e, rev)
     }
 
     /// doc_reply(extra): the edits, their revision, undo / redo, and what they resolve to.
@@ -249,7 +254,7 @@ impl Proj {
                 o.insert(k.clone(), v.clone());
             }
         }
-        if let Some(s) = self.state(&edits)?.as_object() {
+        if let Some(s) = self.state(&edits, rev)?.as_object() {
             for (k, v) in s {
                 o.insert(k.clone(), v.clone());
             }
@@ -593,9 +598,11 @@ impl Proj {
 
     /// review_server.export_labels (developer mode): clean face / not-face labels, written to labels_export.json.
     fn export_labels(&self) -> Result<Value> {
-        let edits = self.doc.lock().unwrap().edits.clone();
-        let links = R::links_for(&edits);
-        let pf = R::resolve(&self.auto, &with_cuts(&edits), &self.mats, self.n, &links, true)?;
+        let (edits, rev) = {
+            let d = self.doc.lock().unwrap();
+            (d.edits.clone(), d.rev)
+        };
+        let pf = self.recs.lock().unwrap().resolved_for(&edits, rev)?;
         let shown = R::shown_pieces(&edits);
         let people = edits.get("people");
         let mut deleted: Vec<String> = edits.get("deleted").as_list().map(|l| l.iter().map(Py::py_str).collect()).unwrap_or_default();
