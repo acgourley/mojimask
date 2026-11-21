@@ -4,7 +4,7 @@
 //! [`crate::evidence::FaceEvidence::face`].)
 //!
 //! For every detection of every tracklet: RetinaFace (reid.landmarks) on the crop around it (reid.face_crop) finds the
-//! most confident face within NEAR (0.35) head sizes of the box centre, its 5 landmarks, and SFace (reid.embed) on the
+//! most confident face within mm_analysis::faces::NEAR (0.35) head sizes of the box centre, its 5 landmarks, and SFace (reid.embed) on the
 //! aligned face. Comparability comes from the landmarks:
 //!   yaw    (nose x - midpoint of the eyes x) / eye distance: ~0 facing the camera, larger as the head turns
 //!   eyes   eye distance / face box width: shrinks as the head turns to profile
@@ -21,15 +21,14 @@ use crate::viz::Viz;
 use mm_core::pyjson::{Dict, Py};
 use std::collections::{BTreeMap, HashMap};
 
-pub const NEAR: f64 = 0.35;
-pub const FRONTAL_SCORE: f64 = 0.6;
-pub const FRONTAL_YAW: f64 = 0.25;
-pub const FRONTAL_PX: f64 = 24.0;
+pub(crate) const FRONTAL_SCORE: f64 = 0.6;
+pub(crate) const FRONTAL_YAW: f64 = 0.25;
+pub(crate) const FRONTAL_PX: f64 = 24.0;
 
 /// {(tracklet, t): measurement or None}
-pub type Faces = HashMap<(i64, i64), Option<FaceM>>;
+pub(crate) type Faces = HashMap<(i64, i64), Option<FaceM>>;
 
-pub fn frontal(f: Option<&FaceM>) -> bool {
+pub(crate) fn frontal(f: Option<&FaceM>) -> bool {
     match f {
         Some(f) => f.score >= FRONTAL_SCORE && f.yaw.abs() <= FRONTAL_YAW && f.px >= FRONTAL_PX,
         None => false,
@@ -37,13 +36,13 @@ pub fn frontal(f: Option<&FaceM>) -> bool {
 }
 
 /// F.get((k, t)) as an Option<&FaceM>.
-pub fn get(fs: &Faces, k: i64, t: i64) -> Option<&FaceM> {
+pub(crate) fn get(fs: &Faces, k: i64, t: i64) -> Option<&FaceM> {
     fs.get(&(k, t)).and_then(|f| f.as_ref())
 }
 
 /// faces.measure (without the cache): every detection of every tracklet, frame by frame. Also returns the order
 /// Python's dict has them in (by frame, then tracklet), for the stage dump.
-pub fn measure(tl: &Tracklets, ev: &mut Evidence, viz: &mut Viz) -> (Faces, Vec<(i64, i64)>) {
+pub(crate) fn measure(tl: &Tracklets, ev: &mut Evidence, viz: &mut Viz) -> (Faces, Vec<(i64, i64)>) {
     let mut by_frame: BTreeMap<i64, Vec<(i64, [f64; 3])>> = BTreeMap::new();
     let mut n = 0;
     for (k, v) in tl {
@@ -84,6 +83,6 @@ pub fn face_json(f: Option<&FaceM>) -> Py {
 }
 
 /// The stage dump (stage_faces.json): [[k, t, measurement], ...] in Python's dict order.
-pub fn faces_json(fs: &Faces, order: &[(i64, i64)]) -> Py {
+pub(crate) fn faces_json(fs: &Faces, order: &[(i64, i64)]) -> Py {
     Py::List(order.iter().map(|(k, t)| Py::List(vec![Py::Int(*k), Py::Int(*t), face_json(get(fs, *k, *t))])).collect())
 }

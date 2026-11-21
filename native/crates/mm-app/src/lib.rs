@@ -9,21 +9,21 @@
 //!
 //! Change notifications: every mutation names the state paths it touched; the host is told (`MmNotifyFn`) and
 //! re-reads the state. "@render" means the video item has a new picture to draw.
-pub mod check;
-pub mod commands;
-pub mod decide;
-pub mod decoder;
-pub mod editor;
-pub mod export;
-pub mod ffi;
-pub mod library;
-pub mod log;
-pub mod people;
-pub mod player;
-pub mod records;
-pub mod render;
-pub mod state;
-pub mod text;
+pub(crate) mod check;
+pub(crate) mod commands;
+pub(crate) mod decide;
+pub(crate) mod decoder;
+pub(crate) mod editor;
+pub(crate) mod export;
+pub(crate) mod ffi;
+pub(crate) mod library;
+pub(crate) mod log;
+pub(crate) mod people;
+pub(crate) mod player;
+pub(crate) mod records;
+pub(crate) mod render;
+pub(crate) mod state;
+pub(crate) mod text;
 
 use mm_engine::jobs::Job;
 use mm_engine::Project;

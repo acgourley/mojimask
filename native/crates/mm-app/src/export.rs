@@ -32,10 +32,6 @@ impl Default for Opts {
     }
 }
 
-pub fn start(sh: &Arc<Shared>, out: &str) -> Result<Value> {
-    start_with(sh, out, Opts::default())
-}
-
 pub fn start_with(sh: &Arc<Shared>, out: &str, opts: Opts) -> Result<Value> {
     if sh.export.lock().unwrap().get().state == JobState::Running {
         bail!("an export is already running");

@@ -1132,8 +1132,6 @@ pub fn redraw(sh: &Arc<Shared>) -> Result<()> {
             base: &base,
             w: l.doc["w"].as_f64().unwrap_or(0.0),
             h: l.doc["h"].as_f64().unwrap_or(0.0),
-            doc: &l.doc,
-            palettes: &l.palettes,
             boxes: &l.boxes,
             missing: l.missing,
         };
@@ -1320,8 +1318,6 @@ pub fn cmd_loop_frames(sh: &Arc<Shared>, pic: usize) -> Value {
         base: &base,
         w: l.doc["w"].as_f64().unwrap_or(0.0),
         h: l.doc["h"].as_f64().unwrap_or(0.0),
-        doc: &l.doc,
-        palettes: &l.palettes,
         boxes: &l.boxes,
         missing: l.missing,
     };
@@ -1402,11 +1398,6 @@ pub fn cmd_people_toggle(sh: &Arc<Shared>, what: &str, tid: &str) -> Result<Valu
     }
     queue_try(sh, "people", redraw);
     Ok(json!("ok"))
-}
-
-/// Mark the sidecar as gone (tests, a crash): the pages say so.
-pub fn sidecar_alive(sh: &Shared) -> bool {
-    sh.lib.lock().unwrap().sc.is_some()
 }
 
 pub fn viz_drained(sh: &Shared) -> Value {

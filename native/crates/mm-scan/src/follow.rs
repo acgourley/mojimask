@@ -12,7 +12,7 @@
 //!   4. else                                 -> hold (camera); heading out of the picture -> keep its own velocity
 //! Stops: the box is mostly outside the picture ("out"), or `limit` frames; with lost=True (covers, not joins) also where
 //! the face is lost ("lost", see face_motion below).
-//! "A face found" = RetinaFace (reid.landmarks) finds a face (score >= FACE) whose centre is within NEAR head sizes of the
+//! "A face found" = RetinaFace (reid.landmarks) finds a face (score >= FACE) whose centre is within NEAR head sizes (mm_analysis::faces::NEAR) of the
 //! box centre; re-centring moves the box onto that face's head box (track.face_to_head), cancelling drift.
 //! Evidence for this rule: jazz labels, and six clips without labels.
 //!
@@ -27,8 +27,9 @@
 //! The face's own flow (follow.face_motion, behind [`crate::evidence::Motion::face_motion`]): corners in the head box
 //! tracked both ways, then one similarity fitted to them. On a visible face nearly all corners agree (jazz, the dancer
 //! bouncing: 0.6-1.0 of them; the move it gives lands within 0.01-0.05 head sizes of her next detection, while the
-//! detections themselves jump up to 0.2). When someone passes in front, the corners go with them or fail: under
-//! LOST_INL agree. That's "lost" -- but only where the rest of the picture tracks fine (Clip.trackable >= STEADY_FRAME;
+//! detections themselves jump up to 0.2). When someone passes in front, the corners go with them or fail: too few
+//! agree (the share is mm-motion's `lost_inl`, head.rs: 0.4 of its blocks, where Python took 0.3 of its corners).
+//! That's "lost" -- but only where the rest of the picture tracks fine (Clip.trackable >= STEADY_FRAME;
 //! in a whip pan everything fails and a smeared face can still be there; party_clip_c's pan, frames 180-238: 0.00-0.48,
 //! never under 0.64 on jazz's steady shot) and the box, with a head's width around it, is inside the picture (corners
 //! at the edge fail too: party_clip_b box 120, a face entering at the right edge, was lost while in plain view). Few
@@ -39,13 +40,11 @@ use crate::np::M23;
 use std::collections::BTreeMap;
 use std::path::Path;
 
-pub const FACE: f64 = 0.5;
-pub const LOOKS: f64 = 0.5;
-pub const OUT: f64 = 0.3;
-pub const TS: i64 = 32;
-pub const LOST_INL: f64 = 0.3;
-pub const STEADY_FRAME: f64 = 0.6;
-pub const LOST_INSIDE: f64 = 0.9;
+pub(crate) const FACE: f64 = 0.5;
+pub(crate) const LOOKS: f64 = 0.5;
+pub(crate) const OUT: f64 = 0.3;
+pub(crate) const STEADY_FRAME: f64 = 0.6;
+pub(crate) const LOST_INSIDE: f64 = 0.9;
 
 /// The clip as the follower sees it: camera motion, frame count and size.
 pub struct Clip {
@@ -70,7 +69,7 @@ impl Clip {
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct FPath {
+pub(crate) struct FPath {
     pub boxes: BTreeMap<i64, Cs>,
     pub how: BTreeMap<i64, &'static str>,
     /// "limit" | "out" | "met" | "clip end" | "lost"
@@ -78,13 +77,13 @@ pub struct FPath {
     pub met: Option<(i64, i64)>,
 }
 
-pub type Meet<'a> = &'a dyn Fn(i64, &Cs) -> Option<i64>;
-pub type Seen<'a> = &'a dyn Fn(i64, &Cs) -> bool;
+pub(crate) type Meet<'a> = &'a dyn Fn(i64, &Cs) -> Option<i64>;
+pub(crate) type Seen<'a> = &'a dyn Fn(i64, &Cs) -> bool;
 
 /// follow.follow. lost=true: stop where the face is lost (face_motion), unless a face is found there or seen(u, box)
 /// -- a weak detection on it -- says it's still showing.
 #[allow(clippy::too_many_arguments)]
-pub fn follow(clip: &Clip, ev: &Evidence, start_t: i64, c0: &Cs, direction: i64, limit: i64, meet: Option<Meet>, lost: bool,
+pub(crate) fn follow(clip: &Clip, ev: &Evidence, start_t: i64, c0: &Cs, direction: i64, limit: i64, meet: Option<Meet>, lost: bool,
               seen: Option<Seen>) -> FPath {
     let mut c = *c0;
     let mut anchor = (start_t, c);

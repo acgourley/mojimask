@@ -36,8 +36,8 @@ use crate::pyset::PySet;
 use indexmap::IndexMap;
 use std::collections::{BTreeSet, HashMap};
 
-pub const V: f64 = 0.2;
-pub const BODY_ONLY: f64 = 0.9;
+pub(crate) const V: f64 = 0.2;
+pub(crate) const BODY_ONLY: f64 = 0.9;
 
 pub fn face_term(sim: f64) -> f64 {
     (3.6 * (sim - 0.49)).max(-2.0).min(1.5)
@@ -48,7 +48,7 @@ pub fn body_term(sim: f64) -> f64 {
 }
 
 /// questions.clear_frames: the frames where a group (its chains ms) shows a clear face.
-pub fn clear_frames(st: &State, ms: &PySet) -> BTreeSet<i64> {
+pub(crate) fn clear_frames(st: &State, ms: &PySet) -> BTreeSet<i64> {
     let mut out = BTreeSet::new();
     for c in ms.iter() {
         for k in &st.chains[&c] {
@@ -63,13 +63,13 @@ pub fn clear_frames(st: &State, ms: &PySet) -> BTreeSet<i64> {
 }
 
 /// questions.is_real: enough detections and a clear face at least once.
-pub fn is_real(n_detections: usize, clear_face: bool) -> bool {
+pub(crate) fn is_real(n_detections: usize, clear_face: bool) -> bool {
     n_detections >= graph::MIN_DET && clear_face
 }
 
 /// One group as the questions see it (questions.groups_data).
 #[derive(Clone, Debug)]
-pub struct Group {
+pub(crate) struct Group {
     pub ms: PySet,
     pub obs: IndexMap<i64, Cs>,
     pub ts: Vec<i64>,
@@ -80,7 +80,7 @@ pub struct Group {
 }
 
 /// questions.groups_data: the real groups; fragments: also the shorter ones (> 2 detections), marked real false.
-pub fn groups_data(st: &mut State, poses: &[Vec<Pose>], ev: &mut Evidence, fragments: bool) -> IndexMap<i64, Group> {
+pub(crate) fn groups_data(st: &mut State, poses: &[Vec<Pose>], ev: &mut Evidence, fragments: bool) -> IndexMap<i64, Group> {
     let mut inv: HashMap<i64, M33> = HashMap::new();
     let mut out = IndexMap::new();
     let mut groups = vec![];
@@ -162,7 +162,7 @@ fn sf(x: f64) -> String {
 /// questions.score: (score, why) or None. motion_only: the least motion score (1 - closeness) that makes a question
 /// without face or body evidence (None: never). A fragment right on a person's path is worth asking about even when
 /// its face and body are too blurred to compare; two whole people in a crowd are not.
-pub fn score(a: &Group, b: &Group, apart_groups: bool, motion_only: Option<f64>, fps: f64) -> Option<(f64, String)> {
+pub(crate) fn score(a: &Group, b: &Group, apart_groups: bool, motion_only: Option<f64>, fps: f64) -> Option<(f64, String)> {
     if apart_groups {
         return None;
     }

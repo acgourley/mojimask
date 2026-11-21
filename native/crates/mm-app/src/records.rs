@@ -70,12 +70,8 @@ pub fn setup_of(v: &Value) -> Result<Setup> {
     })
 }
 
-/// Fetch every frame's record for the project `pid` (`style`: None = the edits' own; `wait`: for the lighting estimate).
-pub fn fetch(sh: &Shared, pid: &str, style: Option<&str>, wait: bool) -> Result<Recs> {
-    fetch_with(sh, pid, style, wait, false)
-}
-
-/// `strict`: higher-risk mode (solid covers over whole heads, review_server.render_setup).
+/// Fetch every frame's record for the project `pid` (`style`: None = the edits' own; `wait`: for the lighting estimate;
+/// `strict`: higher-risk mode, solid covers over whole heads, review_server.render_setup).
 pub fn fetch_with(sh: &Shared, pid: &str, style: Option<&str>, wait: bool, strict: bool) -> Result<Recs> {
     fetch_native(sidecar(sh)?.server(), pid, style, wait, strict)
 }

@@ -17,7 +17,7 @@
 use crate::evidence::Evidence;
 use crate::follow::{self, Clip, FPath};
 use crate::geom::{self, Cs};
-use crate::tracklets::{self, Tracklets};
+use crate::tracklets::Tracklets;
 use crate::viz::{r, Viz};
 use indexmap::IndexMap;
 use mm_core::pyjson::{Dict, Py};
@@ -90,11 +90,6 @@ fn path_viz(p: &FPath, start: i64, w: f64) -> Py {
     Py::Dict(d)
 }
 
-/// join.run.
-pub fn run(proj: &Path, clip: &Clip, ev: &mut Evidence, viz: &mut Viz, limit: i64) -> Result<Joined, String> {
-    let tl = tracklets::build(&tracklets::detections(proj)?, &clip.mats, tracklets::R);
-    Ok(join(tl, clip, ev, viz, limit))
-}
 
 /// join.run after its tracklets are built.
 pub fn join(tl: Tracklets, clip: &Clip, ev: &mut Evidence, viz: &mut Viz, limit: i64) -> Joined {

@@ -7,7 +7,7 @@
 //! are byte-identical to Python's.
 //!
 //! Entry point: [`newalgo::run`] (or [`newalgo::run_logged`], which also writes proto/decide_viz.json) with an
-//! [`evidence::Evidence`]. Today only [`evidence::replay`] implements it (a recording of a Python run,
+//! [`evidence::Evidence`]. Today only [`evidence::replay_counted`] implements it (a recording of a Python run,
 //! tools/parity/scan_record.py); mm-motion (Motion: flow, face_motion, trackable, looks) and mm-analysis
 //! (FaceEvidence: face_near, face; Appearance: body; Depth: near) supply the real ones.
 //!
@@ -18,22 +18,22 @@
 //! Parity (tools/parity/scan_*.py): every stage's output and every file the step writes are identical to Python's on
 //! jazz and jazz_4k (depth off and on) and on 32 jazz frames as photos; decision_bench and photo_bench give the same
 //! numbers with this decide step.
-pub mod attach;
-pub mod behind;
-pub mod blips;
-pub mod cover;
+pub(crate) mod attach;
+pub(crate) mod behind;
+pub(crate) mod blips;
+pub(crate) mod cover;
 pub mod evidence;
 pub mod faces;
 pub mod follow;
 pub mod geom;
-pub mod graph;
-pub mod join;
+pub(crate) mod graph;
+pub(crate) mod join;
 pub mod newalgo;
 pub mod np;
-pub mod overlaps;
-pub mod pose;
+pub(crate) mod overlaps;
+pub(crate) mod pose;
 pub mod pyset;
 pub mod questions;
-pub mod same;
+pub(crate) mod same;
 pub mod tracklets;
 pub mod viz;

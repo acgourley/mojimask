@@ -40,10 +40,10 @@ use crate::viz::Viz;
 use mm_core::pyjson::{self, py_round, Dict, Py};
 use std::path::Path;
 
-pub const SCAN_VERSION: i64 = 3;
-pub const TINY_PX: f64 = 24.0;
-pub const INSIDE: f64 = 0.8;
-pub const COVERED_BY_ANOTHER: &str = "covered by another box";
+pub(crate) const SCAN_VERSION: i64 = 3;
+pub(crate) const TINY_PX: f64 = 24.0;
+pub(crate) const INSIDE: f64 = 0.8;
+pub(crate) const COVERED_BY_ANOTHER: &str = "covered by another box";
 
 fn load(p: &Path) -> Option<Py> {
     if p.exists() {
@@ -89,7 +89,7 @@ fn boxes(v: &Py) -> Vec<(String, [f64; 3])> {
 }
 
 /// newalgo.settle: returns the ids newly hidden. Rewrites the three decision files.
-pub fn settle(proj: &Path, tracks: &Dict, hidden: &[String], overlap: Option<&mut Py>) -> Result<Vec<String>, String> {
+pub(crate) fn settle(proj: &Path, tracks: &Dict, hidden: &[String], overlap: Option<&mut Py>) -> Result<Vec<String>, String> {
     let hidden: std::collections::HashSet<&String> = hidden.iter().collect();
     let mut covered: indexmap::IndexMap<String, std::collections::HashMap<String, [f64; 3]>> = tracks
         .iter()
@@ -191,7 +191,7 @@ pub fn settle(proj: &Path, tracks: &Dict, hidden: &[String], overlap: Option<&mu
 }
 
 /// newalgo.tracks_for: (tracks, hidden, depth) from the built covers. Writes the same-person records too.
-pub fn tracks_for(proj: &Path, b: &mut Built, poses: &[Vec<pose::Pose>], photo: bool, ev: &mut Evidence, viz: &mut Viz, stages: &mut Stages)
+pub(crate) fn tracks_for(proj: &Path, b: &mut Built, poses: &[Vec<pose::Pose>], photo: bool, ev: &mut Evidence, viz: &mut Viz, stages: &mut Stages)
                   -> Result<(Dict, Vec<String>), String> {
     let st: &mut State = &mut b.d.st;
     let mut tracks = Dict::new();
@@ -236,10 +236,10 @@ pub fn tracks_for(proj: &Path, b: &mut Built, poses: &[Vec<pose::Pose>], photo: 
     Ok((tracks, hidden))
 }
 
-pub const EDITS0: &str = r#"{"deleted": [], "trims": {}, "merges": {}, "manual": {}, "emoji": {}, "dismissed": [], "shown": [], "people": {}, "cuts": {}, "cuts_frozen": 1}"#;
+pub(crate) const EDITS0: &str = r#"{"deleted": [], "trims": {}, "merges": {}, "manual": {}, "emoji": {}, "dismissed": [], "shown": [], "people": {}, "cuts": {}, "cuts_frozen": 1}"#;
 
 /// newalgo.write: PROJECT/proto_tracks.json and a fresh PROJECT/edits.json.
-pub fn write(dst: &Path, tracks: Dict, hidden: &[String], extra_edits: Vec<(&str, Py)>, depth: Option<&str>) -> Result<(), String> {
+pub(crate) fn write(dst: &Path, tracks: Dict, hidden: &[String], extra_edits: Vec<(&str, Py)>, depth: Option<&str>) -> Result<(), String> {
     let mut sorted_h: Vec<String> = hidden.to_vec();
     sorted_h.sort();
     let mut p = Dict::new();

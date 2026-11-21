@@ -120,23 +120,23 @@ fn cs(v: &Py) -> Cs {
     [l[0].as_f64().unwrap(), l[1].as_f64().unwrap(), l[2].as_f64().unwrap()]
 }
 
-pub struct ReplayMotion {
+pub(crate) struct ReplayMotion {
     usage: Usage,
     flow: HashMap<String, Py>,
     motion: HashMap<String, Py>,
     trackable: HashMap<String, Py>,
     looks: HashMap<String, Py>,
 }
-pub struct ReplayFaces {
+pub(crate) struct ReplayFaces {
     usage: Usage,
     face_near: HashMap<String, Py>,
     face: HashMap<String, Py>,
 }
-pub struct ReplayBody {
+pub(crate) struct ReplayBody {
     usage: Usage,
     body: HashMap<String, Py>,
 }
-pub struct ReplayDepth {
+pub(crate) struct ReplayDepth {
     usage: Usage,
     depth: HashMap<String, Py>,
     name: String,
@@ -207,12 +207,8 @@ impl Depth for ReplayDepth {
     }
 }
 
-/// Evidence answered from a recording (rec/calls_*.json). depth: the depth model the recording ran with, or None.
-pub fn replay(rec: &Path, depth: Option<&str>) -> Result<Evidence, String> {
-    Ok(replay_counted(rec, depth)?.0)
-}
-
-/// [`replay`], with a handle on which recorded calls were used.
+/// Evidence answered from a recording (rec/calls_*.json), with a handle on which recorded calls were used. depth: the
+/// depth model the recording ran with, or None.
 pub fn replay_counted(rec: &Path, depth: Option<&str>) -> Result<(Evidence, Usage), String> {
     let u = Usage::default();
     let ev = Evidence {

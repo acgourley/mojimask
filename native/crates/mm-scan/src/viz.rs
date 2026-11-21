@@ -50,6 +50,6 @@ impl Viz {
 }
 
 /// Python's round(x, n) as a JSON float.
-pub fn r(x: f64, n: usize) -> Py {
+pub(crate) fn r(x: f64, n: usize) -> Py {
     Py::Float(mm_core::pyjson::py_round(x, n))
 }

@@ -21,8 +21,8 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 pub const R: f64 = 0.5;
-pub const SIZE: (f64, f64) = (0.7, 1.4);
-pub const SKIP: i64 = 1;
+pub(crate) const SIZE: (f64, f64) = (0.7, 1.4);
+pub(crate) const SKIP: i64 = 1;
 
 #[derive(Clone, Debug)]
 pub struct Tracklet {
@@ -42,7 +42,7 @@ impl Tracklet {
 }
 
 /// Tracklets by id (ids are 0.., in creation order: the dict's order in Python).
-pub type Tracklets = BTreeMap<i64, Tracklet>;
+pub(crate) type Tracklets = BTreeMap<i64, Tracklet>;
 
 /// tracklets.detections: per frame, (cs box, score) of the fused core detections.
 pub fn detections(proj: &Path) -> Result<Vec<Vec<(Cs, f64)>>, String> {

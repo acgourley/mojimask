@@ -63,9 +63,6 @@ pub struct Ctx<'a> {
     pub base: &'a str,
     pub w: f64,
     pub h: f64,
-    /// /api/init: resolved covers per frame, edits, scale
-    pub doc: &'a Value,
-    pub palettes: &'a Value,
     /// /api/boxes per piece id: frame -> [x0, y0, x1, y1] (None: a box the server can't follow)
     pub boxes: &'a HashMap<String, Option<BTreeMap<usize, [f64; 4]>>>,
     pub missing: bool,

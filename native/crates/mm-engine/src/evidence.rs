@@ -17,7 +17,7 @@
 //!   decoded through mm-media.
 //! - **motion** (flow, face_motion, trackable, looks), by the scan's motion setting: [`NativeMotion`] (mm-motion's head
 //!   following, our own motion, plus follow.patch/ncc ported exactly) or replayed from a recording
-//!   ([`mm_scan::evidence::replay`]). `looks` takes both patches' frame and box. Camera motion ([`NativeCamera`],
+//!   ([`mm_scan::evidence::replay_counted`]). `looks` takes both patches' frame and box. Camera motion ([`NativeCamera`],
 //!   mats_v2.npy) is mm-motion's camera fit, fed by the detect step's frames.
 //! - Face and motion evidence answer `&self` from several threads (the join's follows run in threads, as join.py's):
 //!   their caches are behind locks and keyed by the call's arguments, so answers never depend on call order.
