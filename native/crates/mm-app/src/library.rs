@@ -948,7 +948,9 @@ pub fn cmd_result_style(sh: &Arc<Shared>, style: String) -> Result<Value> {
     crate::editor::dispatch(sh, "editor_style", &json!({"style": style}))?;
     let s2 = style.clone();
     queue(sh, move |sh| {
-        let (doc, open) = (sh.lib.lock().unwrap().doc.clone(), ds_open(sh));
+        // two statements: in one, the first lock is still held when ds_open takes it again (the app froze here)
+        let doc = sh.lib.lock().unwrap().doc.clone();
+        let open = ds_open(sh);
         result_view(sh, &doc, open);
         let _ = s2;
     });
