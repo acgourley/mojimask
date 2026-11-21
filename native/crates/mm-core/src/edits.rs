@@ -117,13 +117,9 @@ pub fn read_npy_f64(path: &Path) -> Result<(Vec<usize>, Vec<f64>), String> {
 
 impl Geometry {
     pub fn load(work: &Path) -> Result<Geometry, String> {
-        let meta = pyjson::load(&work.join("meta.json"))?;
-        let (shape, v) = read_npy_f64(&work.join("mats_v2.npy"))?;
-        if shape.len() != 3 || shape[1] != 2 || shape[2] != 3 {
-            return Err(format!("mats_v2.npy: shape {shape:?}"));
-        }
-        let mats = v.chunks_exact(6).map(|m| [[m[0], m[1], m[2]], [m[3], m[4], m[5]]]).collect::<Vec<_>>();
-        let proto = pyjson::load(&work.join("proto_tracks.json"))?;
+        let scan = crate::scan::Scan::open(work)?;
+        let mats = scan.mats()?;
+        let proto = pyjson::load(&work.join(crate::scan::PROTO_TRACKS))?;
         let mut auto = vec![];
         if let Some(ts) = proto.get("tracks").as_dict() {
             for (_, tr) in ts.iter() {
@@ -138,12 +134,13 @@ impl Geometry {
                 auto.push(m);
             }
         }
-        let n = meta.get("frames").as_i64().unwrap_or(mats.len() as i64);
+        let n = scan.frames().map(|n| n as i64).unwrap_or(mats.len() as i64);
+        let (w, h) = (scan.meta.get("width").as_f64().unwrap_or(0.0), scan.meta.get("height").as_f64().unwrap_or(0.0));
         Ok(Geometry {
             n,
-            w: meta.get("width").as_f64().unwrap_or(0.0),
-            h: meta.get("height").as_f64().unwrap_or(0.0),
-            fps: meta.get("fps").as_f64().unwrap_or(30.0),
+            w,
+            h,
+            fps: scan.meta.get("fps").as_f64().unwrap_or(30.0),
             mats,
             auto,
         })

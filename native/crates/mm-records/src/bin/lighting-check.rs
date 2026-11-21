@@ -34,7 +34,7 @@ fn main() -> anyhow::Result<()> {
     }
     let t0 = std::time::Instant::now();
     let frames = mm_media::frames::ScanFrames::for_project(&proj)?.sized(6, 512 << 20);
-    let n_frames = pyjson::load(&proj.join("meta.json")).map_err(anyhow::Error::msg)?.get("frames").as_i64().unwrap_or(0).max(0) as usize;
+    let n_frames = mm_core::scan::Scan::open(&proj).map_err(anyhow::Error::msg)?.frames().unwrap_or(0);
     let l = Lighting::new(&snap, &frames, n_frames, &proj, None)?;
     let secs = t0.elapsed().as_secs_f64();
     let n = l.n() as i64;

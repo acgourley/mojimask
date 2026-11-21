@@ -118,17 +118,11 @@ fn f3(v: &Py) -> Option<[f64; 3]> {
 
 impl Project {
     pub fn load(work: &Path) -> Result<Project> {
-        let meta = mm_core::pyjson::load(&work.join("meta.json")).map_err(|e| anyhow!(e))?;
-        let (shape, v) = mm_core::edits::read_npy_f64(&work.join("mats_v2.npy")).map_err(|e| anyhow!(e))?;
-        if shape.len() != 3 || shape[1] != 2 || shape[2] != 3 {
-            return Err(anyhow!("mats_v2.npy: shape {shape:?}"));
-        }
-        let mats: Vec<M23> = v.chunks_exact(6).map(|m| [[m[0], m[1], m[2]], [m[3], m[4], m[5]]]).collect();
-        let p = work.join("proto_tracks.json");
-        if !p.exists() {
-            return Err(anyhow!("{}: no proto_tracks.json -- scanned before the current algorithm; scan the video again", work.display()));
-        }
-        let proto = mm_core::pyjson::load(&p).map_err(|e| anyhow!(e))?;
+        let scan = mm_core::scan::Scan::open(work).map_err(|e| anyhow!(e))?;
+        let meta = &scan.meta;
+        let mats: Vec<M23> = scan.mats().map_err(|e| anyhow!(e))?;
+        let proto = scan.proto_tracks().map_err(|e| anyhow!(e))?
+            .ok_or_else(|| anyhow!("{}: no proto_tracks.json -- scanned before the current algorithm; scan the video again", work.display()))?;
         let mut auto = vec![];
         for (tid, tr) in proto.get("tracks").as_dict().ok_or_else(|| anyhow!("proto_tracks.json: no tracks"))?.iter() {
             let pairs = |k: &str| -> Vec<(i64, [f64; 3])> {
@@ -477,7 +471,7 @@ impl Records {
         std::thread::spawn(move || {
             let r = (|| -> Result<Lighting> {
                 let frames = mm_media::frames::ScanFrames::for_project(&work)?.sized(6, 512 << 20);
-                let n = mm_core::pyjson::load(&work.join("meta.json")).map_err(|e| anyhow!(e))?.get("frames").as_i64().unwrap_or(0).max(0) as usize;
+                let n = mm_core::scan::Scan::open(&work).map_err(|e| anyhow!(e))?.frames().unwrap_or(0);
                 Lighting::new(&snap, &frames, n, &work, None)
             })()
             .map_err(|e| e.to_string());

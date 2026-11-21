@@ -65,7 +65,7 @@ pub fn compute(proj: &Path, name: &str, models: &Models, models_dir: &Path, prog
     }
     // every frame in order, from the video (one decoder, a few frames kept)
     let frames = mm_media::frames::ScanFrames::for_project(proj)?.sized(1, 256 << 20);
-    let n = mm_core::pyjson::load(&proj.join("meta.json")).map_err(|e| anyhow!(e))?.get("frames").as_i64().unwrap_or(0).max(0) as usize;
+    let n = mm_core::scan::Scan::open(proj).map_err(|e| anyhow!(e))?.frames().unwrap_or(0);
     if n == 0 {
         return Err(anyhow!("depth {name}: no frames in {}/meta.json", proj.display()));
     }

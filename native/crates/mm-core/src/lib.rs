@@ -9,6 +9,7 @@
 //! - [`facts`]: the facts log, who's who derived from it, and the Decisions page's answers.
 //! - [`ops`], [`edits`]: the edits document, its undo history, and an open project's changes (covers split, re-followed).
 //! - [`coords`]: which pixel space a project's files are in. [`projects`]: where projects live, their locks.
+//! - [`scan`]: what a scan leaves in a project folder (meta.json, camera motion, proto tracks), read in one place.
 //! - [`palettes`]: the emoji sets.
 //! - [`np`]: numpy's arithmetic, bit for bit (on macOS through Accelerate, as numpy calls it).
 //! - [`privacy`]: which clips are public domain (an agent may look at their pictures).
@@ -27,4 +28,5 @@ pub mod privacy;
 pub mod project;
 pub mod projects;
 pub mod pyjson;
+pub mod scan;
 pub mod time;

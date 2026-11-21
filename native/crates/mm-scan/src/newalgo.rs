@@ -280,12 +280,8 @@ pub fn run(proj: &Path, ev: &mut Evidence, viz: &mut Viz) -> Result<(Dict, Stage
     let (fs, order) = faces::measure(&j.tl, ev, viz);
     stages.put("faces", faces::faces_json(&fs, &order));
     stages.lap("faces");
-    let meta = pyjson::load(&proj.join("meta.json"))?;
-    let fps = match meta.get("fps") {
-        v if v.truthy() => v.as_f64().unwrap(),
-        _ => 24.0,
-    };
-    let photo = meta.get("image").truthy();
+    let scan = mm_core::scan::Scan::open(proj)?;
+    let (fps, photo) = (scan.fps().unwrap_or(24.0), scan.photo());
     let st = graph::run(j.tl, j.chains, fs, clip.mats.clone(), fps, viz);
     stages.put("graph", graph::graph_json(&st));
     stages.lap("graph");

@@ -163,8 +163,8 @@ impl ScanFrames {
 
     /// The project's clip (meta.json's "video"), with the default pool and budget.
     pub fn for_project(work: &std::path::Path) -> Result<ScanFrames> {
-        let meta: serde_json::Value = serde_json::from_slice(&std::fs::read(work.join("meta.json"))?)?;
-        let video = meta["video"].as_str().ok_or_else(|| anyhow!("{}: meta.json names no video", work.display()))?;
+        let scan = mm_core::scan::Scan::open(work).map_err(|e| anyhow!(e))?;
+        let video = scan.video().ok_or_else(|| anyhow!("{}: meta.json names no video", work.display()))?;
         Ok(ScanFrames::open(video, decoders(), cache_bytes()))
     }
 

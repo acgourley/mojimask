@@ -32,7 +32,8 @@ pub const PERSON_KINDS: [&str; 3] = ["scan", "yours", "short"];
 pub struct Proj {
     pub id: String,
     pub work: PathBuf,
-    pub meta: Value,
+    /// the clip the scan read (meta.json)
+    pub video: Option<String>,
     _lock: std::fs::File,
     pub doc: Mutex<Project>,
     pub recs: Mutex<Records>,
@@ -132,7 +133,7 @@ impl Proj {
                 Err(_) => std::thread::sleep(std::time::Duration::from_millis(100)),
             }
         };
-        let meta: Value = serde_json::from_slice(&std::fs::read(work.join("meta.json"))?)?;
+        let scan = mm_core::scan::Scan::open(work).map_err(|e| anyhow!(e))?;
         let doc = Project::open(work, mm_core::edits::system_clock()).map_err(|e| anyhow!(e))?;
         let opts = mm_records::records::Options {
             depth: srv.cfg.depth.clone(),
@@ -154,11 +155,11 @@ impl Proj {
             w: p.w,
             h: p.h,
             fps: p.fps,
-            photo: meta["image"].as_bool().unwrap_or(false),
+            photo: scan.photo(),
             auto: Arc::new(p.auto.clone()),
             mats: Arc::new(p.mats.clone()),
             poses: Arc::new(p.poses.clone()),
-            meta,
+            video: scan.video().map(String::from),
             _lock: lock,
             doc: Mutex::new(doc),
             recs: Mutex::new(recs),
@@ -559,7 +560,7 @@ impl Proj {
             }
             sizes.insert(p.id.to_string(), Value::Object(m));
         }
-        let video = self.meta["video"].as_str().unwrap_or("").to_string();
+        let video = self.video.clone().unwrap_or_default();
         let vp = Path::new(&video);
         let inside = vp.starts_with(&self.work);
         let o = d.as_object_mut().unwrap();
@@ -621,7 +622,7 @@ impl Proj {
             nf_total += nf.len();
             frames.push(json!({"t": t, "faces": faces, "not_faces": nf}));
         }
-        let doc = json!({"video": self.meta["video"], "w": self.w, "h": self.h, "fps": self.fps, "frames": frames});
+        let doc = json!({"video": self.video, "w": self.w, "h": self.h, "fps": self.fps, "frames": frames});
         mm_core::pyjson::write_atomic(&self.work.join("labels_export.json"), &Py::from_serde(&doc).dumps())?;
         Ok(json!({"file": "api/labels_export", "faces": f_total, "not_faces": nf_total}))
     }

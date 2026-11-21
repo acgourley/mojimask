@@ -373,9 +373,10 @@ struct Truth {
 
 impl Truth {
     fn new(census: &Path, proj: &Path) -> Result<Truth> {
-        let meta = load(&proj.join("meta.json"))?;
-        let pt = load(&proj.join("proto_tracks.json"))?;
-        let n = meta.get("frames").as_i64().ok_or_else(|| anyhow!("meta.json: frames"))?;
+        let scan = mm_core::scan::Scan::open(proj).map_err(|e| anyhow!(e))?;
+        let meta = &scan.meta;
+        let pt = scan.proto_tracks().map_err(|e| anyhow!(e))?.ok_or_else(|| anyhow!("{}: no proto_tracks.json", proj.display()))?;
+        let n = scan.frames().ok_or_else(|| anyhow!("meta.json: frames"))? as i64;
         let (frames, scored) = census_frames(census, n)?;
         Ok(Truth {
             w: meta.get("width").as_f64().unwrap_or(1.0),

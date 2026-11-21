@@ -57,17 +57,12 @@ pub struct Clip {
 
 impl Clip {
     pub fn open(proj: &Path) -> Result<Clip, String> {
-        let (shape, v) = mm_core::edits::read_npy_f64(&proj.join("mats_v2.npy"))?;
-        if shape.len() != 3 || shape[1] != 2 || shape[2] != 3 {
-            return Err(format!("mats_v2.npy: shape {shape:?}"));
-        }
-        let mats = v.chunks_exact(6).map(|m| [[m[0], m[1], m[2]], [m[3], m[4], m[5]]]).collect();
-        // the frame count and size from meta.json (the detect step records them; Python counted PROJECT/frames and
-        // read frame 0's shape, the same numbers)
-        let meta = mm_core::pyjson::load(&proj.join("meta.json"))?;
-        let n = meta.get("frames").as_i64().ok_or("meta: frames")?;
-        let (w, h) = (meta.get("width").as_f64().ok_or("meta: width")?, meta.get("height").as_f64().ok_or("meta: height")?);
-        Ok(Clip { mats, n, w, h })
+        // the frame count and size as the detect step recorded them (Python counted PROJECT/frames and read frame
+        // 0's shape, the same numbers)
+        let scan = mm_core::scan::Scan::open(proj)?;
+        let n = scan.frames().ok_or("meta: frames")? as i64;
+        let (w, h) = scan.size().ok_or("meta: width, height")?;
+        Ok(Clip { mats: scan.mats()?, n, w, h })
     }
     pub fn camera(&self, a: i64, b: i64) -> M23 {
         geom::camera(&self.mats, a, b)
