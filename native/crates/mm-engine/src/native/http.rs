@@ -49,8 +49,10 @@ fn one(c: TcpStream, srv: &Arc<Server>) -> std::io::Result<()> {
     let mut body = vec![0u8; len.min(1 << 30)];
     r.read_exact(&mut body)?;
     let rep: Reply = srv.handle(&method, &path, &body);
+    let (status, ctype, cache) = (rep.status, rep.ctype, rep.cache);
+    let body = rep.into_bytes();
     let mut w = c;
-    let reason = match rep.status {
+    let reason = match status {
         200 => "OK",
         400 => "Bad Request",
         404 => "Not Found",
@@ -58,15 +60,15 @@ fn one(c: TcpStream, srv: &Arc<Server>) -> std::io::Result<()> {
     };
     let mut head = format!(
         "HTTP/1.1 {} {reason}\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\n",
-        rep.status,
-        rep.ctype,
-        rep.body.len()
+        status,
+        ctype,
+        body.len()
     );
-    if let Some(cc) = &rep.cache {
+    if let Some(cc) = &cache {
         head.push_str(&format!("Cache-Control: {cc}\r\n"));
     }
     head.push_str("\r\n");
     w.write_all(head.as_bytes())?;
-    w.write_all(&rep.body)?;
+    w.write_all(&body)?;
     w.flush()
 }

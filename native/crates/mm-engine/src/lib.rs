@@ -11,7 +11,6 @@
 //! - The stand-in for a scanned project: the PoC dump (`out/poc/data/<clip>`, written by
 //!   native/tools/dump_reference.py from today's Python engine) with the user's edits on top ([`dump`], [`project`]),
 //!   and progress reporting for long jobs ([`jobs`]).
-pub mod backend;
 pub mod check;
 pub mod depth;
 pub mod detect;

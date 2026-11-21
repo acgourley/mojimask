@@ -21,7 +21,6 @@ pub mod http;
 pub mod project;
 pub mod whose;
 
-use crate::backend::Backend;
 use anyhow::{anyhow, bail, Result};
 use mm_core::pyjson::{self, Py};
 use serde_json::{json, Map, Value};
@@ -52,13 +51,26 @@ pub struct Config {
 pub struct Reply {
     pub status: u16,
     pub ctype: &'static str,
-    pub body: Vec<u8>,
+    body: Vec<u8>,
+    /// a JSON reply, kept as the value: only the HTTP server writes it out ([`Reply::into_bytes`]); the app's own
+    /// calls ([`Client`]) take it as it is, with no encoding and parsing inside one process
+    value: Option<Value>,
     pub cache: Option<&'static str>,
 }
 
 impl Reply {
+    pub fn value(v: Value) -> Reply {
+        Reply { status: 200, ctype: "application/json", body: vec![], value: Some(v), cache: None }
+    }
     pub fn json(v: &Value) -> Reply {
-        Reply { status: 200, ctype: "application/json", body: serde_json::to_vec(v).unwrap(), cache: None }
+        Reply::value(v.clone())
+    }
+    /// The body as bytes (a JSON reply encoded now).
+    pub fn into_bytes(self) -> Vec<u8> {
+        match self.value {
+            Some(v) => serde_json::to_vec(&v).unwrap(),
+            None => self.body,
+        }
     }
     pub fn err(status: u16, msg: impl Into<String>) -> Reply {
         let mut r = Reply::json(&json!({"error": msg.into()}));
@@ -66,7 +78,7 @@ impl Reply {
         r
     }
     pub fn bytes(ctype: &'static str, body: Vec<u8>) -> Reply {
-        Reply { status: 200, ctype, body, cache: None }
+        Reply { status: 200, ctype, body, value: None, cache: None }
     }
 }
 
@@ -263,15 +275,22 @@ impl Server {
     // ------------------------------------------------------------------------------------------------ dispatch
     /// One request, as app_server.py (and, under /p/<id>/, the project's review_server.py) answers it.
     pub fn handle(self: &Arc<Self>, method: &str, path: &str, body: &[u8]) -> Reply {
+        match if body.is_empty() { Ok(json!({})) } else { serde_json::from_slice(body) } {
+            Ok(body) => self.handle_value(method, path, &body),
+            Err(e) => Reply::err(400, e.to_string()),
+        }
+    }
+
+    /// [`Server::handle`] with the request's JSON as a value.
+    pub fn handle_value(self: &Arc<Self>, method: &str, path: &str, body: &Value) -> Reply {
         let r = (|| -> Res {
-            let body: Value = if body.is_empty() { json!({}) } else { serde_json::from_slice(body).map_err(|e| Fail(400, e.to_string()))? };
             let (p, q) = path.split_once('?').unwrap_or((path, ""));
             if let Some(rest) = p.strip_prefix("/p/") {
                 let (pid, sub) = rest.split_once('/').map(|(a, b)| (a, format!("/{b}"))).unwrap_or((rest, "/".into()));
                 let proj = self.project(pid)?;
-                return proj.handle(self, method, &sub, &query(q), &body);
+                return proj.handle(self, method, &sub, &query(q), body);
             }
-            if method == "GET" { self.get(p, &query(q)) } else { self.post(p, &body) }
+            if method == "GET" { self.get(p, &query(q)) } else { self.post(p, body) }
         })();
         match r {
             Ok(r) => r,
@@ -810,44 +829,143 @@ pub fn log(s: &str) {
 }
 
 // ------------------------------------------------------------------------------------------------ the app's client
-/// The app's handle on the native engine: the same calls as the Python sidecar's, answered in process.
+/// The app's handle on the engine: every call the store makes, by name. The routes themselves ([`Server::handle`])
+/// are what the HTTP server answers for QML's pictures and what `web/` once called; the store used to build those
+/// route strings itself, about forty times, through a `Backend` trait left from when a Python sidecar was the other
+/// engine, and each reply was encoded to JSON and parsed again inside the one process.
 pub struct Client(pub Arc<Server>);
 
-impl Client {
-    fn call(&self, method: &str, path: &str, body: &[u8]) -> Result<Vec<u8>> {
-        let r = self.0.handle(method, path, body);
-        if !(200..300).contains(&r.status) {
-            let msg = serde_json::from_slice::<Value>(&r.body).ok().and_then(|v| v["error"].as_str().map(String::from))
-                .unwrap_or_else(|| String::from_utf8_lossy(&r.body).chars().take(200).collect());
-            bail!("{path}: {} {msg}", r.status);
-        }
-        Ok(r.body)
-    }
+/// What the library's ⋯ menu does to a project.
+#[derive(Clone, Copy, Debug)]
+pub enum Act {
+    ClearCache,
+    Delete,
+    CloneFresh,
+    Cancel,
 }
 
-impl Backend for Client {
-    fn engine(&self) -> &'static str {
-        "native"
-    }
-    fn base(&self) -> String {
-        format!("http://127.0.0.1:{}", self.0.port)
-    }
-    fn get_bytes(&self, path: &str) -> Result<Vec<u8>> {
-        self.call("GET", path, &[])
+impl Client {
+    fn call(&self, method: &str, path: &str, body: &Value) -> Result<Value> {
+        let r = self.0.handle_value(method, path, body);
+        let status = r.status;
+        let v = match r.value {
+            Some(v) => v,
+            None => serde_json::from_slice(&r.body).unwrap_or(Value::Null),
+        };
+        if !(200..300).contains(&status) {
+            bail!("{path}: {status} {}", v["error"].as_str().unwrap_or(""));
+        }
+        Ok(v)
     }
     fn get(&self, path: &str) -> Result<Value> {
-        Ok(serde_json::from_slice(&self.call("GET", path, &[])?)?)
+        self.call("GET", path, &json!({}))
     }
-    fn post(&self, path: &str, body: &Value, _slow: bool) -> Result<Value> {
-        Ok(serde_json::from_slice(&self.call("POST", path, &serde_json::to_vec(body)?)?)?)
+    fn post(&self, path: &str, body: &Value) -> Result<Value> {
+        self.call("POST", path, body)
     }
-    fn alive(&self) -> bool {
-        true
+
+    /// http://127.0.0.1:<port>: where the pictures are served (QML loads them by URL)
+    pub fn base(&self) -> String {
+        format!("http://127.0.0.1:{}", self.0.port)
     }
-    fn pid(&self) -> u32 {
-        std::process::id()
+    pub fn url(&self, path: &str) -> String {
+        format!("{}{}", self.base(), path)
     }
-    fn native(&self) -> Option<Arc<Server>> {
-        Some(self.0.clone())
+    /// the engine itself, for what it hands over directly (the draw records)
+    pub fn server(&self) -> &Arc<Server> {
+        &self.0
+    }
+
+    // ---- the library
+    pub fn projects(&self) -> Result<Value> {
+        self.get("/api/projects")
+    }
+    pub fn app(&self) -> Result<Value> {
+        self.get("/api/app")
+    }
+    /// {path, ...}: a video or photo into a new project, scanned
+    pub fn import(&self, body: &Value) -> Result<Value> {
+        self.post("/api/import_path", body)
+    }
+    pub fn status(&self, id: &str) -> Result<Value> {
+        self.get(&format!("/api/status/{id}"))
+    }
+    /// the decide step's events from number `since` on (developer mode)
+    pub fn decide_viz(&self, id: &str, since: usize) -> Result<Value> {
+        self.get(&format!("/api/projects/{id}/decide_viz?since={since}"))
+    }
+    pub fn act(&self, id: &str, act: Act) -> Result<Value> {
+        let what = match act {
+            Act::ClearCache => "clear_cache",
+            Act::Delete => "delete",
+            Act::CloneFresh => "clone_fresh",
+            Act::Cancel => "cancel",
+        };
+        self.post(&format!("/api/projects/{id}/{what}"), &json!({}))
+    }
+    pub fn relink(&self, id: &str, path: &str) -> Result<Value> {
+        self.post(&format!("/api/projects/{id}/relink"), &json!({"path": path}))
+    }
+
+    // ---- an open project
+    pub fn init(&self, pid: &str) -> Result<Value> {
+        self.get(&format!("/p/{pid}/api/init"))
+    }
+    pub fn formats(&self, pid: &str) -> Result<Value> {
+        self.get(&format!("/p/{pid}/api/formats"))
+    }
+    pub fn decisions(&self, pid: &str) -> Result<Value> {
+        self.get(&format!("/p/{pid}/api/decisions"))
+    }
+    /// answer None: clear it
+    pub fn answer(&self, pid: &str, id: &str, answer: &Value) -> Result<Value> {
+        self.post(&format!("/p/{pid}/api/decisions"), &json!({"id": id, "answer": answer}))
+    }
+    /// boxes' frames and squares, for the Decisions page's loops
+    pub fn boxes(&self, pid: &str, ids: &[String]) -> Result<Value> {
+        self.get(&format!("/p/{pid}/api/boxes?ids={}", ids.join(",")))
+    }
+    pub fn depth(&self, pid: &str, t: usize) -> Result<Value> {
+        self.get(&format!("/p/{pid}/api/depth/{t}"))
+    }
+    pub fn pose(&self, pid: &str, t: usize) -> Result<Value> {
+        self.get(&format!("/p/{pid}/api/pose/{t}"))
+    }
+    pub fn light(&self, pid: &str) -> Result<Value> {
+        self.get(&format!("/p/{pid}/api/light"))
+    }
+    pub fn export_labels(&self, pid: &str) -> Result<Value> {
+        self.get(&format!("/p/{pid}/api/export_labels"))
+    }
+    /// {ops, label, undoable?}: change the edits
+    pub fn ops(&self, pid: &str, body: &Value) -> Result<Value> {
+        self.post(&format!("/p/{pid}/api/ops"), body)
+    }
+    /// {facts, label, page}: add to the facts log
+    pub fn facts(&self, pid: &str, body: &Value) -> Result<Value> {
+        self.post(&format!("/p/{pid}/api/facts"), body)
+    }
+    pub fn undo(&self, pid: &str, redo: bool) -> Result<Value> {
+        self.post(&format!("/p/{pid}/api/{}", if redo { "redo" } else { "undo" }), &json!({}))
+    }
+    /// {t, if_missing?}: the library's thumbnail from frame t
+    pub fn thumb(&self, pid: &str, body: &Value) -> Result<Value> {
+        self.post(&format!("/p/{pid}/api/thumb"), body)
+    }
+    /// {data}: the portrait style's picture
+    pub fn portrait(&self, pid: &str, body: &Value) -> Result<Value> {
+        self.post(&format!("/p/{pid}/api/portrait"), body)
+    }
+    /// {t, c}: a cover placed at frame t, followed through the frames around it
+    pub fn propagate(&self, pid: &str, body: &Value) -> Result<Value> {
+        self.post(&format!("/p/{pid}/api/propagate"), body)
+    }
+    /// {piece, t}
+    pub fn undo_correction(&self, pid: &str, body: &Value) -> Result<Value> {
+        self.post(&format!("/p/{pid}/api/undo_correction"), body)
+    }
+    /// {piece, t}
+    pub fn split_cover(&self, pid: &str, body: &Value) -> Result<Value> {
+        self.post(&format!("/p/{pid}/api/split_cover"), body)
     }
 }

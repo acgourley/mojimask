@@ -416,7 +416,7 @@ pub fn page_dispatch(sh: &Arc<Shared>, cmd: &str, a: &Value) -> Result<Value> {
                 crate::library::queue(sh, move |sh| {
                     let pid = sh.lib.lock().unwrap().pid.clone();
                     if let Ok(sc) = crate::library::sidecar(sh) {
-                        if let Ok(r) = sc.post(&format!("/p/{pid}/api/ops"), &json!({"ops": [{"op": "set", "path": ["watermark"], "value": m}], "label": "Mark", "undoable": false}), true) {
+                        if let Ok(r) = sc.ops(&pid, &json!({"ops": [{"op": "set", "path": ["watermark"], "value": m}], "label": "Mark", "undoable": false})) {
                             crate::editor::took(sh, &r);
                         }
                     }
@@ -464,7 +464,7 @@ pub fn page_dispatch(sh: &Arc<Shared>, cmd: &str, a: &Value) -> Result<Value> {
 
 fn count_open(sh: &Shared) -> Result<()> {
     let pid = sh.lib.lock().unwrap().pid.clone();
-    let dr = crate::library::sidecar(sh)?.get_slow(&format!("/p/{pid}/api/decisions"))?;
+    let dr = crate::library::sidecar(sh)?.decisions(&pid)?;
     let n = dr["decisions"].as_array().into_iter().flatten().filter(|d| d.get("by").is_none_or(Value::is_null)).count();
     sh.lib.lock().unwrap().xp.open = n;
     Ok(())
@@ -472,7 +472,7 @@ fn count_open(sh: &Shared) -> Result<()> {
 
 fn load_page(sh: &Arc<Shared>) -> Result<()> {
     let pid = sh.lib.lock().unwrap().pid.clone();
-    let f = crate::library::sidecar(sh)?.get(&format!("/p/{pid}/api/formats"))?;
+    let f = crate::library::sidecar(sh)?.formats(&pid)?;
     sh.lib.lock().unwrap().xp.formats = f;
     count_open(sh)?;
     publish_page(sh);

@@ -315,8 +315,6 @@ impl Proj {
                 return Ok(Reply::json(&self.doc_reply(extra)?));
             }
             "/api/edits" => return Ok(Reply::json(&self.doc_reply(json!({}))?)),
-            "/api/rev" => return Ok(Reply::json(&json!({"rev": self.doc.lock().unwrap().rev}))),
-            "/api/render" => return Ok(Reply::json(&json!({"status": "idle", "progress": 0.0, "file": null, "path": null, "error": null}))),
             "/api/light" => {
                 let mut r = self.recs.lock().unwrap();
                 if !r.light_ready() {
@@ -463,7 +461,6 @@ impl Proj {
                 r?.to_serde()
             }
             "/api/thumb" => self.thumb(srv, body)?,
-            "/api/render" => return Err(Fail(400, "exports are made by the app".into())),
             "/api/portrait" => {
                 let data = body["data"].as_str().unwrap_or("");
                 let bytes = b64_decode(data.rsplit(',').next().unwrap_or("")).ok_or_else(|| Fail(400, "that file isn't a picture this app can read".into()))?;

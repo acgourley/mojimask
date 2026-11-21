@@ -4,7 +4,6 @@
 //! its last key "ok". The scan's motion is native (no Python); depth is on when the depth model is there.
 use crate::Shared;
 use anyhow::{anyhow, bail, Result};
-use mm_engine::backend::Backend;
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -49,14 +48,14 @@ fn check(sh: &Arc<Shared>, dir: &Path) -> Result<Value> {
     let scan = mm_engine::scan::Options::from_args(&args)?;
     let cfg = mm_engine::native::Config { root: root.clone(), projects: dir.join("projects"), dev: false, depth: depth.clone(), scan, ports: (9300, 9400) };
     let srv = mm_engine::native::Server::start(cfg)?;
-    let client: Arc<dyn Backend> = Arc::new(mm_engine::native::Client(srv));
+    let client = Arc::new(mm_engine::native::Client(srv));
     sh.lib.lock().unwrap().sc = Some(client.clone());
     // the scan
     let t0 = Instant::now();
-    let id = client.post("/api/import_path", &json!({"path": clip.to_string_lossy()}), false)?["id"].as_str().map(String::from)
+    let id = client.import(&json!({"path": clip.to_string_lossy()}))?["id"].as_str().map(String::from)
         .ok_or_else(|| anyhow!("import: no project id"))?;
     let st = loop {
-        let st = client.get(&format!("/api/status/{id}"))?;
+        let st = client.status(&id)?;
         if let Some(e) = st["error"].as_str() {
             bail!("scan: {e}");
         }
@@ -69,7 +68,7 @@ fn check(sh: &Arc<Shared>, dir: &Path) -> Result<Value> {
         std::thread::sleep(Duration::from_millis(250));
     };
     let scan_s = t0.elapsed().as_secs_f64();
-    let doc = client.get(&format!("/p/{id}/api/init"))?;
+    let doc = client.init(&id)?;
     let covers: usize = doc["resolved"].as_array().map(|f| f.iter().map(|x| x.as_array().map_or(0, |a| a.len())).sum()).unwrap_or(0);
     // the export, with covers
     {

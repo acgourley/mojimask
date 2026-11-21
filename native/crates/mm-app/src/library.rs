@@ -11,7 +11,7 @@ use crate::people;
 use crate::text::{v, Text};
 use crate::{log, Shared};
 use anyhow::{anyhow, bail, Result};
-use mm_engine::backend::Backend;
+use mm_engine::native::{Act, Client};
 use serde::Serialize;
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashMap};
@@ -24,7 +24,7 @@ pub type Job = Box<dyn FnOnce(&Arc<Shared>) + Send>;
 /// What the store keeps about the library and the open project, outside the state tree.
 #[derive(Default)]
 pub struct Lib {
-    pub sc: Option<Arc<dyn Backend>>,
+    pub sc: Option<Arc<Client>>,
     /// the scan on show: its id, and a generation (a newer scan or leaving stops the poller)
     pub scan_id: String,
     pub scan_gen: u64,
@@ -208,7 +208,7 @@ fn queue_try(sh: &Arc<Shared>, what: &'static str, f: impl FnOnce(&Arc<Shared>) 
     });
 }
 
-pub fn sidecar(sh: &Shared) -> Result<Arc<dyn Backend>> {
+pub fn sidecar(sh: &Shared) -> Result<Arc<Client>> {
     sh.lib.lock().unwrap().sc.clone().ok_or_else(|| anyhow!("the engine isn't running yet"))
 }
 
@@ -323,8 +323,8 @@ const OLD_DAYS: f64 = 30.0;
 
 pub fn refresh_library(sh: &Arc<Shared>) -> Result<()> {
     let sc = sidecar(sh)?;
-    let ps = sc.get("/api/projects")?;
-    let app = sc.get("/api/app")?;
+    let ps = sc.projects()?;
+    let app = sc.app()?;
     let tx = sh.text.clone();
     let root = sh.root();
     let mut cards = vec![];
@@ -415,7 +415,7 @@ pub fn refresh_library(sh: &Arc<Shared>) -> Result<()> {
             String::new()
         };
         l.dev_line = if l.dev {
-            format!("Dev · engine {} · depth {} · server since {}", sc.engine(), app["depth"].as_str().unwrap_or("off"),
+            format!("Dev · engine {} · depth {} · server since {}", "native", app["depth"].as_str().unwrap_or("off"),
                     short_date(app["started"].as_f64().unwrap_or(0.0)))
         } else {
             String::new()
@@ -445,7 +445,7 @@ pub fn cmd_import(sh: &Arc<Shared>, path: Option<String>) -> Result<Value> {
                 Some(p) => json!({"path": p}),
                 None => json!({"sample": true}),
             };
-            let r = sc.post("/api/import_path", &body, false)?;
+            let r = sc.import(&body)?;
             r["id"].as_str().map(String::from).ok_or_else(|| anyhow!("{}", r["error"].as_str().unwrap_or("no project id")))
         })();
         sh.st.lock().unwrap().library.busy.clear();
@@ -472,30 +472,30 @@ pub fn cmd_project_action(sh: &Arc<Shared>, id: String, act: String, path: Optio
         let card = sh.st.lock().unwrap().library.projects.iter().find(|p| p.id == id).cloned().unwrap_or_default();
         match act.as_str() {
             "clear" => {
-                sc.post(&format!("/api/projects/{id}/clear_cache"), &json!({}), false)?;
+                sc.act(&id, Act::ClearCache)?;
                 sh.st.lock().unwrap().library.message = tx.t("projects.freed_one", &v(&[("size", card.cache_text.clone()), ("name", card.name.clone())]));
             }
             "clear_stale" => {
                 let olds: Vec<ProjectCard> = sh.st.lock().unwrap().library.projects.iter().filter(|p| p.stale).cloned().collect();
                 for p in &olds {
-                    sc.post(&format!("/api/projects/{}/clear_cache", p.id), &json!({}), false)?;
+                    sc.act(&p.id, Act::ClearCache)?;
                 }
                 let b: f64 = olds.iter().map(|p| p.cache as f64).sum();
                 sh.st.lock().unwrap().library.message = tx.t("projects.freed_many", &v(&[("n", olds.len().to_string()), ("size", fmt_bytes(&tx, b))]));
             }
             "delete" => {
-                sc.post(&format!("/api/projects/{id}/delete"), &json!({}), false)?;
+                sc.act(&id, Act::Delete)?;
                 sh.st.lock().unwrap().library.message.clear();
             }
             "clone" => {
-                let r = sc.post(&format!("/api/projects/{id}/clone_fresh"), &json!({}), false)?;
+                let r = sc.act(&id, Act::CloneFresh)?;
                 if let Some(e) = r["error"].as_str() {
                     bail!("Couldn't clone “{}”: {e}", card.name);
                 }
             }
             "relink" => {
                 let p = path.ok_or_else(|| anyhow!("relink: no path"))?;
-                sc.post(&format!("/api/projects/{id}/relink"), &json!({"path": crate::commands::local_path(&p)}), false)?;
+                sc.relink(&id, &crate::commands::local_path(&p))?;
             }
             _ => bail!("no action '{act}'"),
         }
@@ -550,7 +550,7 @@ fn poll_scan(sh: &Arc<Shared>, id: &str, gen: u64) {
     let mut last_preview = Instant::now() - Duration::from_secs(10);
     while live() {
         let Ok(sc) = sidecar(sh) else { return };
-        let st = match sc.get(&format!("/api/status/{id}")) {
+        let st = match sc.status(&id) {
             Ok(s) => {
                 fails = 0;
                 s
@@ -583,7 +583,7 @@ fn poll_scan(sh: &Arc<Shared>, id: &str, gen: u64) {
         let want_viz = !opening && !image && error.is_empty() && (current == "decide" || viz_on);
         if want_viz {
             let n = sh.lib.lock().unwrap().viz.len();
-            if let Ok(r) = sc.get(&format!("/api/projects/{id}/decide_viz?since={n}")) {
+            if let Ok(r) = sc.decide_viz(&id, n) {
                 if let Some(evs) = r["events"].as_array() {
                     let mut l = sh.lib.lock().unwrap();
                     if l.scan_gen == gen && l.viz.len() == n {
@@ -622,7 +622,7 @@ fn poll_scan(sh: &Arc<Shared>, id: &str, gen: u64) {
 }
 
 /// app.html pollScan: the scan page's words and numbers from /api/status.
-fn scan_view(sh: &Arc<Shared>, sc: &dyn Backend, st: &Value, viz: bool, preview_due: bool) {
+fn scan_view(sh: &Arc<Shared>, sc: &Client, st: &Value, viz: bool, preview_due: bool) {
     let tx = &sh.text;
     let ready = st["ready"].as_bool().unwrap_or(false);
     let current = st["current"].as_str().unwrap_or("");
@@ -759,7 +759,7 @@ pub fn cmd_cancel_scan(sh: &Arc<Shared>) -> Result<Value> {
         bail!("no scan to cancel");
     }
     queue_try(sh, "library", move |sh| {
-        sidecar(sh)?.post(&format!("/api/projects/{id}/cancel"), &json!({}), false)?;
+        sidecar(sh)?.act(&id, Act::Cancel)?;
         leave_project(sh);
         refresh_library(sh)
     });
@@ -782,13 +782,12 @@ pub fn cmd_open(sh: &Arc<Shared>, id: &str) -> Result<Value> {
 
 fn open_project(sh: &Arc<Shared>, id: &str) -> Result<()> {
     let sc = sidecar(sh)?;
-    let p = format!("/p/{id}");
-    let doc = sc.get_slow(&format!("{p}/api/init"))?;
-    let name = sc.get(&format!("{p}/api/formats"))?["name"].as_str().unwrap_or(id).to_string();
-    let dr = sc.get_slow(&format!("{p}/api/decisions"))?;
+    let doc = sc.init(id)?;
+    let name = sc.formats(id)?["name"].as_str().unwrap_or(id).to_string();
+    let dr = sc.decisions(id)?;
     let meta_video = {
         // the project's video, for the Editor and the privacy rule
-        let st = sc.get(&format!("/api/status/{id}")).unwrap_or(Value::Null);
+        let st = sc.status(&id).unwrap_or(Value::Null);
         st["meta"]["video"].as_str().unwrap_or("").to_string()
     };
     let public = mm_core::privacy::is_public_clip(&sh.root(), std::path::Path::new(&meta_video));
@@ -817,7 +816,7 @@ fn open_project(sh: &Arc<Shared>, id: &str) -> Result<()> {
             id: id.to_string(),
             open: true,
             name,
-            base: sc.url(&p),
+            base: sc.url(&format!("/p/{id}")),
             public,
             w: doc["w"].as_f64().unwrap_or(0.0),
             h: doc["h"].as_f64().unwrap_or(0.0),
@@ -835,15 +834,15 @@ fn open_project(sh: &Arc<Shared>, id: &str) -> Result<()> {
     if first {
         result_view(sh, &doc, ds_open(sh));
         sh.st.lock().unwrap().app.page = "result".into();
-        let _ = sc.post(&format!("{p}/api/ops"), &json!({"ops": [{"op": "set", "path": ["result"], "value": "pending"}], "label": "Result", "undoable": false}), true);
+        let _ = sc.ops(id, &json!({"ops": [{"op": "set", "path": ["result"], "value": "pending"}], "label": "Result", "undoable": false}));
     }
     log::info(&format!("opened project {id} ({} decisions, {})", sh.lib.lock().unwrap().decisions.len(), if any_open { "questions open" } else { "none open" }));
     redraw(sh)?;
     // its picture on the Projects page, as its covers are now (not waited for)
     let t = busiest_frame(&doc);
-    let (sc2, p2) = (sc.clone(), p.clone());
+    let (sc2, id2) = (sc.clone(), id.to_string());
     std::thread::spawn(move || {
-        let _ = sc2.post(&format!("{p2}/api/thumb"), &json!({"t": t, "if_missing": true}), true);
+        let _ = sc2.thumb(&id2, &json!({"t": t, "if_missing": true}));
     });
     // the Editor shows the project's video with its covers drawn from the project's draw records (records.rs)
     if !meta_video.is_empty() {
@@ -937,7 +936,7 @@ pub fn cmd_result_done(sh: &Arc<Shared>, to: &str) -> Result<Value> {
     let page = if to == "export" { "export" } else { "decisions" };
     queue_try(sh, "library", |sh| {
         let pid = sh.lib.lock().unwrap().pid.clone();
-        let r = sidecar(sh)?.post(&format!("/p/{pid}/api/ops"), &json!({"ops": [{"op": "set", "path": ["result"], "value": "done"}], "label": "Result", "undoable": false}), true)?;
+        let r = sidecar(sh)?.ops(&pid, &json!({"ops": [{"op": "set", "path": ["result"], "value": "done"}], "label": "Result", "undoable": false}))?;
         crate::editor::took(sh, &r);
         Ok(())
     });
@@ -1014,7 +1013,7 @@ pub fn cmd_go(sh: &Arc<Shared>, page: &str) -> Result<Value> {
         leave_project(sh);
         queue_try(sh, "library", move |sh| {
             if !pid.is_empty() {
-                let _ = sidecar(sh)?.post(&format!("/p/{pid}/api/thumb"), &json!({"t": busiest_frame(&doc)}), true);
+                let _ = sidecar(sh)?.thumb(&pid, &json!({"t": busiest_frame(&doc)}));
             }
             refresh_library(sh)
         });
@@ -1063,8 +1062,8 @@ pub fn reload(sh: &Arc<Shared>) -> Result<()> {
         return Ok(());
     }
     let sc = sidecar(sh)?;
-    let doc = sc.get_slow(&format!("/p/{pid}/api/init"))?;
-    let dr = sc.get_slow(&format!("/p/{pid}/api/decisions"))?;
+    let doc = sc.init(&pid)?;
+    let dr = sc.decisions(&pid)?;
     let mut ds = dr["decisions"].as_array().cloned().unwrap_or_default();
     decide::sort(&mut ds);
     {
@@ -1102,7 +1101,7 @@ pub fn redraw(sh: &Arc<Shared>) -> Result<()> {
     }
     if !want.is_empty() {
         if let Ok(sc) = sidecar(sh) {
-            let r = sc.get(&format!("/p/{pid}/api/boxes?ids={}", want.join(","))).unwrap_or(Value::Null);
+            let r = sc.boxes(&pid, &want).unwrap_or(Value::Null);
             let mut l = sh.lib.lock().unwrap();
             for k in want {
                 let m = r.get(&k).and_then(Value::as_object).map(|o| {
@@ -1258,7 +1257,7 @@ fn answer_now(sh: &Arc<Shared>, id: &str, answer: Option<&str>) -> Result<()> {
         bail!("no project open");
     }
     let was_open = sh.lib.lock().unwrap().decisions.iter().any(|d| decide::by(d) == "open");
-    let r = sidecar(sh)?.post(&format!("/p/{pid}/api/decisions"), &json!({"id": id, "answer": answer}), true)?;
+    let r = sidecar(sh)?.answer(&pid, id, &json!(answer))?;
     let kind = {
         let mut l = sh.lib.lock().unwrap();
         for k in ["resolved", "edits", "hidden", "persons", "rev", "can_undo", "can_redo"] {
@@ -1287,7 +1286,7 @@ fn answer_now(sh: &Arc<Shared>, id: &str, answer: Option<&str>) -> Result<()> {
     sh.st.lock().unwrap().decisions.error.clear();
     log::info(&format!("answered {id}: {}", answer.unwrap_or("(cleared)")));
     if kind == "same" || kind == "whose" {
-        let dr = sidecar(sh)?.get_slow(&format!("/p/{pid}/api/decisions"))?;
+        let dr = sidecar(sh)?.decisions(&pid)?;
         let mut ds = dr["decisions"].as_array().cloned().unwrap_or_default();
         decide::sort(&mut ds);
         sh.lib.lock().unwrap().decisions = ds;
@@ -1336,7 +1335,7 @@ pub fn cmd_undo(sh: &Arc<Shared>, redo: bool) -> Result<Value> {
         if pid.is_empty() {
             bail!("no project open");
         }
-        sidecar(sh)?.post(&format!("/p/{pid}/api/{}", if redo { "redo" } else { "undo" }), &json!({}), true)?;
+        sidecar(sh)?.undo(&pid, redo)?;
         reload(sh)
     });
     Ok(json!("queued"))
@@ -1362,11 +1361,7 @@ pub fn cmd_people_say(sh: &Arc<Shared>, tid: String, kind: String, value: Value)
                 "show" => if value.as_bool().unwrap_or(false) { "unmask" } else { "mask" },
                 k => k,
             };
-            let r = sidecar(sh)?.post(
-                &format!("/p/{pid}/api/facts"),
-                &json!({"facts": [{"kind": kind, "pieces": pieces, "value": value}], "label": label, "page": "people"}),
-                true,
-            )?;
+            let r = sidecar(sh)?.facts(&pid, &json!({"facts": [{"kind": kind, "pieces": pieces, "value": value}], "label": label, "page": "people"}))?;
             let mut l = sh.lib.lock().unwrap();
             if let (Some(o), Some(rec)) = (l.doc.as_object_mut(), r.as_object()) {
                 for (k, x) in rec {
@@ -1411,7 +1406,7 @@ pub fn cmd_people_toggle(sh: &Arc<Shared>, what: &str, tid: &str) -> Result<Valu
 
 /// Mark the sidecar as gone (tests, a crash): the pages say so.
 pub fn sidecar_alive(sh: &Shared) -> bool {
-    sh.lib.lock().unwrap().sc.as_ref().is_some_and(|s| s.alive())
+    sh.lib.lock().unwrap().sc.is_some()
 }
 
 pub fn viz_drained(sh: &Shared) -> Value {

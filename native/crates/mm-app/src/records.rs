@@ -1,6 +1,6 @@
 //! The open project's draw records: what the Editor and the export draw from.
 //!
-//! The project's server (native/tools/sidecar/project_server.py: review_server.py plus `/api/native/records`) decides
+//! The project's server (mm_engine::native, through its Proj and mm-records) decides
 //! every frame's covers exactly as Python's export does (review_server.render_setup, track.draw_order,
 //! depth.Occlusion.plan): the head box, the emoji or portrait, the head pose, the lighting estimate and the cover's
 //! velocity, the depth cut. mm-render's `Drawer` draws them (track.draw_frame on the GPU). The one thing measured
@@ -77,58 +77,7 @@ pub fn fetch(sh: &Shared, pid: &str, style: Option<&str>, wait: bool) -> Result<
 
 /// `strict`: higher-risk mode (solid covers over whole heads, review_server.render_setup).
 pub fn fetch_with(sh: &Shared, pid: &str, style: Option<&str>, wait: bool, strict: bool) -> Result<Recs> {
-    let sc = sidecar(sh)?;
-    if let Some(srv) = sc.native() {
-        return fetch_native(&srv, pid, style, wait, strict);
-    }
-    let base = format!("/p/{pid}/api/native");
-    let sv = sc.get_slow(&format!("{base}/setup"))?;
-    let setup = setup_of(&sv)?;
-    let n = sv["n"].as_u64().unwrap_or(0) as usize;
-    let mut frames = Vec::with_capacity(n);
-    let mut near = Vec::with_capacity(n);
-    let mut photos = HashMap::new();
-    let (mut key, mut rev, mut st, mut light_ready) = (String::new(), Value::Null, String::new(), false);
-    let mut lo = 0;
-    while lo < n.max(1) {
-        let hi = (lo + 400).min(n);
-        let mut q = format!("{base}/records?from={lo}&to={hi}&wait={}", if wait { 1 } else { 0 });
-        if let Some(s) = style {
-            q.push_str(&format!("&style={s}"));
-        }
-        if strict {
-            q.push_str("&strict=1");
-        }
-        let r = sc.get_slow(&q)?;
-        if lo > 0 && r["key"].as_str() != Some(key.as_str()) {
-            // the edits changed while we read: start again
-            return fetch_with(sh, pid, style, wait, strict);
-        }
-        key = r["key"].as_str().unwrap_or_default().to_string();
-        rev = r["rev"].clone();
-        st = r["style"].as_str().unwrap_or("emoji").to_string();
-        light_ready = r["light_ready"].as_bool().unwrap_or(false);
-        for x in r["records"].as_array().into_iter().flatten() {
-            if let Some(p) = x["photos"].as_object() {
-                for (k, v) in p {
-                    photos.insert(k.clone(), v.as_str().unwrap_or_default().to_string());
-                }
-            }
-            near.push(match x["near"].as_str() {
-                Some(b) => {
-                    let bytes = b64(b)?;
-                    Some((Arc::new(bytemuck_f32(&bytes)), x["mw"].as_u64().unwrap_or(1) as u32, x["mh"].as_u64().unwrap_or(1) as u32))
-                }
-                None => None,
-            });
-            frames.push(serde_json::from_value::<FrameRecord>(x.clone()).context("a frame record")?);
-        }
-        if n == 0 {
-            break;
-        }
-        lo = hi;
-    }
-    Ok(Recs { pid: pid.to_string(), key, rev, style: st, light_ready, frames, near, photos, setup })
+    fetch_native(sidecar(sh)?.server(), pid, style, wait, strict)
 }
 
 /// The records straight from the native engine's mm-records (no JSON, no HTTP).
@@ -155,7 +104,7 @@ fn fetch_native(srv: &Arc<mm_engine::native::Server>, pid: &str, style: Option<&
 /// /api/thumb): (w, h, BGR).
 pub fn draw_project_frame(sh: &Shared, pid: &str, t: usize, style: &str) -> Result<(usize, usize, Vec<u8>)> {
     let sc = sidecar(sh)?;
-    let srv = sc.native().ok_or_else(|| anyhow!("not the native engine"))?;
+    let srv = sc.server();
     let p = srv.project(pid).map_err(|f| anyhow!("{pid}: {}", f.1))?;
     let m = p.frames.try_get(t as i64)?;
     let d = mm_vision::jpeg::Decoded { w: m.cols, h: m.rows, channels: 3, data: m.data.clone() };
@@ -221,36 +170,6 @@ pub fn refresh(sh: &Arc<Shared>) {
         }
         Err(e) => log::warn(&format!("records: {e:#}")),
     }
-}
-
-fn b64(s: &str) -> Result<Vec<u8>> {
-    const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut inv = [255u8; 256];
-    for (i, &c) in T.iter().enumerate() {
-        inv[c as usize] = i as u8;
-    }
-    let mut out = Vec::with_capacity(s.len() * 3 / 4);
-    let (mut acc, mut bits) = (0u32, 0);
-    for &c in s.as_bytes() {
-        if c == b'=' {
-            break;
-        }
-        let v = inv[c as usize];
-        if v == 255 {
-            return Err(anyhow!("bad base64"));
-        }
-        acc = (acc << 6) | v as u32;
-        bits += 6;
-        if bits >= 8 {
-            bits -= 8;
-            out.push((acc >> bits) as u8);
-        }
-    }
-    Ok(out)
-}
-
-fn bytemuck_f32(b: &[u8]) -> Vec<f32> {
-    b.chunks_exact(4).map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect()
 }
 
 /// lighting.frame_grain: robust noise sigma (8-bit units) of a BGR frame: the median deviation from a slightly

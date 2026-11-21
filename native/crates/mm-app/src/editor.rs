@@ -536,12 +536,12 @@ fn overlays(sh: &Arc<Shared>, t: usize) {
         (l.ed.depth_view, l.ed.pose_view)
     };
     if dv {
-        if let Ok(d) = sc.get(&format!("/p/{pid}/api/depth/{t}")) {
+        if let Ok(d) = sc.depth(&pid, t) {
             sh.lib.lock().unwrap().ed.depth.insert(t, d);
         }
     }
     if pv {
-        if let Ok(d) = sc.get(&format!("/p/{pid}/api/pose/{t}")) {
+        if let Ok(d) = sc.pose(&pid, t) {
             sh.lib.lock().unwrap().ed.pose.insert(t, d);
         }
     }
@@ -571,17 +571,18 @@ pub fn took(sh: &Arc<Shared>, r: &Value) {
     crate::records::refresh(sh);
 }
 
-fn post(sh: &Arc<Shared>, path: &str, body: Value) -> Result<Value> {
+/// A call on the open project.
+fn call(sh: &Arc<Shared>, f: impl FnOnce(&mm_engine::native::Client, &str) -> Result<Value>) -> Result<Value> {
     let pid = sh.lib.lock().unwrap().pid.clone();
     if pid.is_empty() {
         bail!("no project open");
     }
-    sidecar(sh)?.post(&format!("/p/{pid}/api/{path}"), &body, true)
+    f(&*sidecar(sh)?, &pid)
 }
 
 /// Send ops (one undo step) and take the reply.
 fn ops(sh: &Arc<Shared>, ops: Vec<Value>, label: &str) -> Result<()> {
-    let r = post(sh, "ops", json!({"ops": ops, "label": label}))?;
+    let r = call(sh, |c, pid| c.ops(pid, &json!({"ops": ops, "label": label})))?;
     took(sh, &r);
     Ok(())
 }
@@ -593,7 +594,7 @@ fn facts(sh: &Arc<Shared>, kind: &str, pieces: Vec<String>, value: Value, label:
             o.insert(k.clone(), x.clone());
         }
     }
-    let r = post(sh, "facts", json!({"facts": [f], "label": label, "page": "edit"}))?;
+    let r = call(sh, |c, pid| c.facts(pid, &json!({"facts": [f], "label": label, "page": "edit"})))?;
     took(sh, &r);
     refresh_decisions(sh);
     Ok(())
@@ -602,7 +603,7 @@ fn facts(sh: &Arc<Shared>, kind: &str, pieces: Vec<String>, value: Value, label:
 fn refresh_decisions(sh: &Arc<Shared>) {
     let pid = sh.lib.lock().unwrap().pid.clone();
     if let Ok(sc) = sidecar(sh) {
-        if let Ok(dr) = sc.get_slow(&format!("/p/{pid}/api/decisions")) {
+        if let Ok(dr) = sc.decisions(&pid) {
             let mut ds = dr["decisions"].as_array().cloned().unwrap_or_default();
             crate::decide::sort(&mut ds);
             sh.lib.lock().unwrap().decisions = ds;
@@ -816,7 +817,7 @@ pub fn dispatch(sh: &Arc<Shared>, cmd: &str, a: &Value) -> Result<Value> {
                 if fs.is_empty() {
                     return Ok(());
                 }
-                let r = post(sh, "facts", json!({"facts": fs, "label": "Clear picked emoji", "page": "edit"}))?;
+                let r = call(sh, |c, pid| c.facts(pid, &json!({"facts": fs, "label": "Clear picked emoji", "page": "edit"})))?;
                 took(sh, &r);
                 Ok(())
             });
@@ -834,7 +835,7 @@ pub fn dispatch(sh: &Arc<Shared>, cmd: &str, a: &Value) -> Result<Value> {
             let p = crate::commands::local_path(&s("path").ok_or_else(|| anyhow!("editor_portrait: missing 'path'"))?);
             work(sh, "portrait", move |sh| {
                 let bytes = std::fs::read(&p)?;
-                let r = post(sh, "portrait", json!({"data": format!("data:image/png;base64,{}", b64(&bytes))}))?;
+                let r = call(sh, |c, pid| c.portrait(pid, &json!({"data": format!("data:image/png;base64,{}", b64(&bytes))})))?;
                 let file = r["file"].as_str().ok_or_else(|| anyhow!("no photo made"))?.to_string();
                 ops(sh, vec![json!({"op": "set", "path": ["portrait"], "value": file})], "portrait")
             });
@@ -843,7 +844,7 @@ pub fn dispatch(sh: &Arc<Shared>, cmd: &str, a: &Value) -> Result<Value> {
         "editor_export_labels" => {
             work(sh, "labels", |sh| {
                 let pid = sh.lib.lock().unwrap().pid.clone();
-                let r = sidecar(sh)?.get_slow(&format!("/p/{pid}/api/export_labels"));
+                let r = sidecar(sh)?.export_labels(&pid);
                 sh.lib.lock().unwrap().ed.labels = match r {
                     Ok(r) => format!("labels: {} faces, {} not-faces · labels_export.json", r["faces"], r["not_faces"]),
                     Err(e) => format!("Export labels failed: {e:#}"),
@@ -931,7 +932,7 @@ fn place(sh: &Arc<Shared>, t: usize, c: [f64; 3]) {
             let manual = l.doc["edits"]["manual"].clone();
             (sel, manual)
         };
-        let pr = post(sh, "propagate", json!({"t": t, "c": c}))?;
+        let pr = call(sh, |e, pid| e.propagate(pid, &json!({"t": t, "c": c})))?;
         let (prop, ev) = (pr["prop"].clone(), pr["ev"].clone());
         match sel.filter(|p| manual.get(p.as_str()).is_some()) {
             Some(id) => {
@@ -1025,7 +1026,7 @@ fn act(sh: &Arc<Shared>, what: &str) -> Result<Value> {
                 if edits["manual"][piece.as_str()]["keys"].get(t.to_string()).is_none() {
                     return Ok(());
                 }
-                let r = post(sh, "undo_correction", json!({"piece": piece, "t": t}))?;
+                let r = call(sh, |c, pid| c.undo_correction(pid, &json!({"piece": piece, "t": t})))?;
                 took(sh, &r);
                 Ok(())
             }
@@ -1051,7 +1052,7 @@ fn act(sh: &Arc<Shared>, what: &str) -> Result<Value> {
             "split" => {
                 let base = piece.split('~').next().unwrap_or("").to_string();
                 if base.starts_with('m') {
-                    let r = post(sh, "split_cover", json!({"piece": piece, "t": t}))
+                    let r = call(sh, |c, pid| c.split_cover(pid, &json!({"piece": piece, "t": t})))
                         .map_err(|e| anyhow!("{}", sh.text.t("edit.err.split", &v(&[("piece", piece.clone()), ("error", format!("{e:#}"))]))))?;
                     let new = idstr(&r["new"]);
                     took(sh, &r);
@@ -1169,7 +1170,7 @@ fn b64(b: &[u8]) -> String {
 pub fn fetch_light(sh: &Arc<Shared>) {
     let pid = sh.lib.lock().unwrap().pid.clone();
     let Ok(sc) = sidecar(sh) else { return };
-    let Ok(r) = sc.get_slow(&format!("/p/{pid}/api/light")) else { return };
+    let Ok(r) = sc.light(&pid) else { return };
     let ready = r["ready"].as_bool().unwrap_or(false);
     let keep = json!({"ready": ready, "progress": r["progress"], "error": r["error"], "scene_key": r["scene_key"]});
     {

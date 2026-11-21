@@ -49,8 +49,8 @@ the main checkout's models).
 
 ## The engine
 
-`mm_engine::native` answers the pages' routes in this process (`crates/mm-engine/src/native/`; the app talks to it
-through `mm_engine::backend::Backend`, the routes the Python app's pages used):
+`mm_engine::native` answers the pages' routes in this process (`crates/mm-engine/src/native/`; the store calls it
+through `mm_engine::native::Client`, one named call per route, and QML loads pictures from its HTTP server):
 - the library, import, the scan (`mm_engine::scan` on a thread: its reports and "Deciding who's who" events live),
   cancel, clear cache, delete, clone fresh, relink, the pictures (thumb, preview, head);
 - per open project, one `mm_core::edits::Project`: the single writer of edits.json and facts.json, holding
